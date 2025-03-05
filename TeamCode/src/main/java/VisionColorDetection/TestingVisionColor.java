@@ -56,7 +56,7 @@ import org.firstinspires.ftc.vision.opencv.PredominantColorProcessor;
  */
 
 //@Disabled
-@TeleOp(name = "Concept: Testing Vision Color ", group = "Concept")
+@TeleOp(name = "Testing Vision Color Sensor", group = "Concept")
 public class TestingVisionColor extends LinearOpMode
 {
     @Override
