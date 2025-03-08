@@ -106,11 +106,13 @@ public class LocalizationTest extends OpMode {
         // Denominator is the largest motor power (absolute value) or 1
         // This ensures all the powers maintain the same ratio, but only when
         // at least one is out of the range [-1, 1]
-        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1);
-        double leftFrontPower = (y + x + rx) / denominator;
-        double leftRearPower = (y - x + rx) / denominator;
-        double rightFrontPower = (y - x - rx) / denominator;
-        double rightRearPower = (y + x - rx) / denominator;
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1)*5;
+//        double denominator = 4; // manual adjustment
+
+        double leftFrontPower = (y + x + rx) / (denominator);
+        double leftRearPower = (y - x + rx) / (denominator);
+        double rightFrontPower = (y - x - rx) / (denominator);
+        double rightRearPower = (y + x - rx) / (denominator);
 
         leftFront.setPower(leftFrontPower);
         leftRear.setPower(leftRearPower);
