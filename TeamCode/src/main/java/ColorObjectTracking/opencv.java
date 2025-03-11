@@ -11,6 +11,9 @@ import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
+import org.firstinspires.ftc.vision.opencv.ColorBlobLocatorProcessor;
+import org.firstinspires.ftc.vision.opencv.ColorRange;
+import org.firstinspires.ftc.vision.opencv.ImageRegion;
 import org.opencv.core.*;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgproc.Moments;
@@ -35,9 +38,10 @@ public class opencv extends LinearOpMode {
     private static final int CAMERA_HEIGHT = 360; // height of wanted camera resolution
 
     // Calculate the distance using the formula
-    public static final double objectWidthInRealWorldUnits = 3.75;  // Replace with the actual width of the object in real-world units
-    public static final double focalLength = 728;  // Replace with the focal length of the camera in pixels
-
+    public static final double objectWidthInRealWorldUnits = 1.456693;  // Replace with the actual width of the object in real-world units
+    public static final double focalLength = 550;  // Replace with the focal length of the camera in pixels
+//    to find F, when we have P is around 60 pixels, D is around 18.89764 inches, Width = 1.456693 inches, so F= (D*P)/w
+//    F = 18.89764 * 60 / 1.456693 = 778.378 or 650 for P=50 pixels
 
     @Override
     public void runOpMode() {
@@ -70,7 +74,7 @@ public class opencv extends LinearOpMode {
 
         // Use OpenCvCameraFactory class from FTC SDK to create camera instance
         controlHubCam = OpenCvCameraFactory.getInstance().createWebcam(
-                hardwareMap.get(WebcamName.class, "Webcam 1"), cameraMonitorViewId);
+                hardwareMap.get(WebcamName.class, "webCam1"), cameraMonitorViewId);
 
         controlHubCam.setPipeline(new YellowBlobDetectionPipeline());
 
@@ -118,12 +122,34 @@ public class opencv extends LinearOpMode {
             return input;
         }
 
+
         private Mat preprocessFrame(Mat frame) {
+
+//             color_dict_HSV = {'black': [[180, 255, 30], [0, 0, 0]],
+//            'white': [[180, 18, 255], [0, 0, 231]],
+//            'red1': [[180, 255, 255], [159, 50, 70]],
+//            'red2': [[9, 255, 255], [0, 50, 70]],
+//            'green': [[89, 255, 255], [36, 50, 70]],
+//            'blue': [[128, 255, 255], [90, 50, 70]],
+//            'yellow': [[35, 255, 255], [25, 50, 70]],
+//            'purple': [[158, 255, 255], [129, 50, 70]],
+//            'orange': [[24, 255, 255], [10, 50, 70]],
+//            'gray': [[180, 18, 230], [0, 0, 40]]}
+//
+
             Mat hsvFrame = new Mat();
             Imgproc.cvtColor(frame, hsvFrame, Imgproc.COLOR_BGR2HSV);
+//            Imgproc.cvtColor(frame, hsvFrame, Imgproc.COLOR_RGB2HSV);
 
-            Scalar lowerYellow = new Scalar(100, 100, 100);
-            Scalar upperYellow = new Scalar(180, 255, 255);
+//            'yellow': [[35, 255, 255], [25, 50, 70]],
+
+            Scalar lowerYellow = new Scalar(55, 100, 100);
+
+            Scalar upperYellow = new Scalar(100, 255, 255);
+//            ColorBlobLocatorProcessor colorLocator = new ColorBlobLocatorProcessor.Builder()
+//                    .setTargetColorRange(ColorRange.YELLOW)
+//                    .build();
+
 
 
             Mat yellowMask = new Mat();
