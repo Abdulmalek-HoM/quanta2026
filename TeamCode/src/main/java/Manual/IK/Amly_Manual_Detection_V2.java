@@ -1,4 +1,4 @@
-package Manual;
+package Manual.IK;
 
 import android.util.Size;
 
@@ -7,7 +7,6 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 
@@ -24,9 +23,9 @@ import org.opencv.core.RotatedRect;
 
 import java.util.List;
 
-@TeleOp(name = "Amly Manula Detection")
+@TeleOp(name = "Amly Manula Detection V2")
 
-public class Amly_Manual_Detection extends LinearOpMode{
+public class Amly_Manual_Detection_V2 extends LinearOpMode{
 
     private IMU imu_IMU;
     private DcMotor BaseL;

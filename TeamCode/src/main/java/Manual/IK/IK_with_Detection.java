@@ -1,4 +1,4 @@
-package Manual;
+package Manual.IK;
 
 import android.util.Size;
 
@@ -7,7 +7,6 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 
@@ -24,9 +23,9 @@ import org.opencv.core.RotatedRect;
 
 import java.util.List;
 
-@TeleOp(name = "Amly Manula Detection")
+@TeleOp(name = "IK with Detection")
 
-public class Amly_Manual_Detection extends LinearOpMode{
+public class IK_with_Detection extends LinearOpMode{
 
     private IMU imu_IMU;
     private DcMotor BaseL;
@@ -134,24 +133,27 @@ public class Amly_Manual_Detection extends LinearOpMode{
         Gripper_Close = 0.7;
 
         gripperR.setPosition(Gripper_Close);
-        multiplier = 0.7;
+        multiplier = 0.5;
         Sample_Intake2 = 0;
         Slides2 = 0;
         //hang = 1;
         ARM12 = 0;
-
+        // Add these near your other hardware declarations
+        final double TICKS_PER_DEGREE = 600/180.0;  // From your calibration
+        final double MAX_SLIDE_EXTENSION = 1000;  // mm
+        final double ARM_BASE_HEIGHT = 0.23;  // meters
 
         //////// The foll0wing lines are for color detection portal ///////
         ColorBlobLocatorProcessor colorLocator = new ColorBlobLocatorProcessor.Builder()
-                .setTargetColorRange(ColorRange.YELLOW)         // use a predefined color match
+                .setTargetColorRange(ColorRange.BLUE)         // use a predefined color match
                 //.setTargetColorRange(ColorRange.RED)
                 .setContourMode(ColorBlobLocatorProcessor.ContourMode.EXTERNAL_ONLY)    // exclude blobs inside blobs
                 //.setRoi(ImageRegion.asUnityCenterCoordinates(-0.5, 0.5, 0.5, -0.5))  // search central 1/4 of camera view
-                .setRoi(ImageRegion.asImageCoordinates(210, 145,  285, 220))
+                .setRoi(ImageRegion.asImageCoordinates(200, 100,  300, 280))
 
                 .setDrawContours(true)                        // Show contours on the Stream Preview
-                .setBlurSize(3)                               // Smooth the transitions between different colors in image
-                .setErodeSize(3) // For Low Quallity 2 to 4
+                .setBlurSize(5)                               // Smooth the transitions between different colors in image
+                .setErodeSize(4) // For Low Quallity 2 to 4
                 .setDilateSize(4) // For Low Quallity 2 to 4
 
                 .build();
@@ -188,7 +190,7 @@ public class Amly_Manual_Detection extends LinearOpMode{
             // Read the current list
             List<ColorBlobLocatorProcessor.Blob> blobs = colorLocator.getBlobs();
 
-            ColorBlobLocatorProcessor.Util.filterByArea(2000, 5000, blobs);  // filter out very small blobs.
+            ColorBlobLocatorProcessor.Util.filterByArea(500, 8000, blobs);  // filter out very small blobs.
             telemetry.addLine(" Area Density Aspect  Center");
             org.opencv.core.Size myBoxFitSize;
             for(ColorBlobLocatorProcessor.Blob b : blobs) {
@@ -278,7 +280,7 @@ public class Amly_Manual_Detection extends LinearOpMode{
 
 
             List<ColorBlobLocatorProcessor.Blob> blobs = colorLocator.getBlobs();
-            ColorBlobLocatorProcessor.Util.filterByArea(2000, 5000, blobs);  // filter out very small blobs.
+            ColorBlobLocatorProcessor.Util.filterByArea(1000, 8000, blobs);  // filter out very small blobs.
 
             org.opencv.core.Size myBoxFitSize;
             for (ColorBlobLocatorProcessor.Blob b : blobs) {
@@ -294,10 +296,10 @@ public class Amly_Manual_Detection extends LinearOpMode{
 
 
                 // If statements to create the logic of selecting the Correct Oriented Sample
-                CONTOUR_AREA = 5000 > AREA && AREA > 2000;
-                CONTOUR_WIDTH = 90 > WIDTH && WIDTH > 40;
+                CONTOUR_AREA = 7000 > AREA && AREA > 1000;
+                CONTOUR_WIDTH = 150 > WIDTH && WIDTH > 60;
                 CONTOUR_HEIGHT = 80 > HEIGHT && HEIGHT > 30;
-                CONTOUR_CENTER = 290 > CENTER_X && CENTER_X > 200 && 210 > CENTER_Y && CENTER_Y > 150;
+                CONTOUR_CENTER = 290 > CENTER_X && CENTER_X > 200 && 240 > CENTER_Y && CENTER_Y > 180;
                 CONTOUR_ANGLE = 100 > ANGLE && ANGLE > 40;
             }
 //                           .setRoi(ImageRegion.asImageCoordinates(200, 50,  300, 280))
@@ -313,32 +315,65 @@ public class Amly_Manual_Detection extends LinearOpMode{
                     Sample_Intake2 = 0;
                 }
 
-            if (CONTOUR_AREA && CONTOUR_WIDTH && CONTOUR_HEIGHT && CONTOUR_CENTER && CONTOUR_ANGLE){
 
-                leftFront.setPower(0);
-                rightFront.setPower(0);
-                leftBack.setPower(0);
-                rightBack.setPower(0);
-                gamepad1.rumble(500);
+                if (CONTOUR_AREA && CONTOUR_WIDTH && CONTOUR_HEIGHT && CONTOUR_CENTER && CONTOUR_ANGLE) {
+                    // 1. Convert camera to robot coordinates
+                    double[] robotCoords = convertCameraToRobot(CENTER_X, CENTER_Y);
 
-                Sample_Intake();
+                    // 2. Calculate inverse kinematics
+                    ArmSolution solution = calculateIK(
+                            robotCoords[0],
+                            robotCoords[1],
+                            robotCoords[2],
+                            ANGLE
+                    );
+                    telemetry.addData("Converted Coords", "X=%.2f Y=%.2f Z=%.2f",
+                            robotCoords[0], robotCoords[1], robotCoords[2]);
 
-                sleep(1500);
-                Ground_Grab();
-                sleep(500);
+                    // 3. Move arm
+                    moveToPosition(solution);
 
+                    // 4. Wait for arrival
+                    while(opModeIsActive() && !reachedPosition(solution)) {
+                        sleep(50);
+                    }
 
-                for (int i = 0; i < 2; i++) {
-                    CONTOUR_AREA = false;
-                    CONTOUR_WIDTH = false;
-                    CONTOUR_HEIGHT = false;
-                    CONTOUR_CENTER = false;
-                    CONTOUR_ANGLE = false;
+                    // 5. Execute grab sequence
+                    gripperR.setPosition(0.2);  // Open
+                    sleep(500);
+                    tilting.setPosition(0.75);  // Lower gripper
+                    sleep(500);
+                    gripperR.setPosition(0.7);  // Close
+                    sleep(500);
+                    Home_Position();  // Retract
                 }
 
-
-
-            }
+//            if (CONTOUR_AREA && CONTOUR_WIDTH && CONTOUR_HEIGHT && CONTOUR_CENTER && CONTOUR_ANGLE){
+//
+//                leftFront.setPower(0);
+//                rightFront.setPower(0);
+//                leftBack.setPower(0);
+//                rightBack.setPower(0);
+//                gamepad1.rumble(500);
+//
+//                Sample_Intake();
+//
+//                sleep(1500);
+//                Ground_Grab();
+//                sleep(500);
+//
+//
+//                for (int i = 0; i < 2; i++) {
+//                    CONTOUR_AREA = false;
+//                    CONTOUR_WIDTH = false;
+//                    CONTOUR_HEIGHT = false;
+//                    CONTOUR_CENTER = false;
+//                    CONTOUR_ANGLE = false;
+//                }
+//
+//
+//
+//            }
             if (gamepad1.cross && CONTOUR_AREA && CONTOUR_WIDTH && CONTOUR_HEIGHT && CONTOUR_CENTER && CONTOUR_ANGLE) {
 
                 Sample_Intake();
@@ -435,17 +470,17 @@ public class Amly_Manual_Detection extends LinearOpMode{
     private void Sample_Intake() {
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
-        tilting.setPosition(0.4);
+        tilting.setPosition(0.5);
         ArmBase(0, 1);
         sleep(1000);
-        Slides(3000, 3000);
+        Slides(2500, 3000);
     }
 
     /**
      * Describe this function...
      */
     private void Specimen_Intake() {
-        tilting.setPosition(0.2);
+        tilting.setPosition(0.3);
         sleep(300);
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
@@ -458,14 +493,13 @@ public class Amly_Manual_Detection extends LinearOpMode{
      * Describe this function...
      */
     private void Specimen_Outake() {
+        Slides(0, 3000);
+        sleep(500);
         gripperR.setPosition(Gripper_Close);
 //        sleep(700);
         ArmBase(500, 1);
         gripperL.setPosition(0);
         tilting.setPosition(0.55);
-
-        sleep(500);
-        Slides(500, 3000);
     }
 
     /**
@@ -485,14 +519,85 @@ public class Amly_Manual_Detection extends LinearOpMode{
      */
     private void Ground_Grab() {
         gripperL.setPosition(1);
-        tilting.setPosition(0.70);
+        tilting.setPosition(0.75);
         sleep(500);
         gripperR.setPosition(1);
         sleep(300);
-        tilting.setPosition(0.3);
+        tilting.setPosition(0.4);
 //        Home_Position();
     }
 
+    private double[] convertCameraToRobot(double x_cam, double y_cam) {
+        // Camera ROI: (200,100) to (300,280) in 640x480
+        double mmPerPixelX = 0.25;  // Calibrate these!
+        double mmPerPixelY = 0.22;
+
+        return new double[] {
+                (x_cam - 200) * mmPerPixelX / 1000.0 + 0.175,  // X (meters)
+                (y_cam - 100) * mmPerPixelY / 1000.0 - 0.15,   // Y (meters)
+                0.035  // Fixed sample height (meters)
+        };
+    }
+    private ArmSolution calculateIK(double x, double y, double z, double blobAngle) {
+        // Relative to arm base
+        double relX = x - 0.25;
+        double relY = y;
+        double relZ = z - 0.30;//ARM_BASE_HEIGHT
+
+        // Base angle (θ₁)
+//        double theta1 = Math.toDegrees(Math.atan2(relY, relX));
+        double theta1=0; // this is my edit
+
+        // Slide extension (mm)
+        double slideExtension = Math.sqrt(relX*relX + relY*relY) * 1000;
+
+        // Tilt angle (θ₂)
+        double theta2 = 90 - Math.toDegrees(Math.atan2(relZ, slideExtension/1000.0));
+
+        // Wrist compensation (θ₃)
+        double theta3 = blobAngle - theta2;
+
+        return new ArmSolution(theta1, theta2, theta3, slideExtension);
+    }
+
+    private boolean reachedPosition(ArmSolution target) {
+//        return Math.abs(BaseL.getCurrentPosition() - angleToTicks(target.theta1)) < 20 &&
+//                Math.abs(SlideL.getCurrentPosition() - target.slideExtension) < 50;
+
+        return Math.abs(BaseL.getCurrentPosition() - BaseL.getTargetPosition()) < 20 &&
+                Math.abs(SlideL.getCurrentPosition() - target.slideExtension) < 50; /// this is my edit
+    }
+    private void moveToPosition(ArmSolution solution) {
+        // Base motors
+//        int baseTicks = angleToTicks(solution.theta1);
+        int baseTicks = 0; /// this is my edit
+
+        BaseL.setTargetPosition(baseTicks);
+        BaseR.setTargetPosition(baseTicks);
+
+        // Slide motors
+        SlideL.setTargetPosition((int)solution.slideExtension);
+        SlideR.setTargetPosition((int)solution.slideExtension);
+
+        // Servos
+        double tiltPos = 0.3 + (solution.theta2/90.0) * 0.4;
+        tilting.setPosition(tiltPos);
+
+        double wristPos = (solution.theta3 + 90.0)/180.0;
+        gripperL.setPosition(wristPos);
+
+        // Enable motors
+        BaseL.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        BaseR.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        SlideL.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        SlideR.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        // Set power
+        BaseL.setPower(1.0);
+        BaseR.setPower(1.0);
+        SlideR.setPower(1.0);
+        SlideL.setPower(1.0);
+    }
     private void data() {
         ColorBlobLocatorProcessor colorLocator = new ColorBlobLocatorProcessor.Builder()
                 .setTargetColorRange(ColorRange.BLUE)         // use a predefined color match
@@ -549,6 +654,7 @@ public class Amly_Manual_Detection extends LinearOpMode{
         telemetry.addData("CONTOUR_HEIGHT", CONTOUR_HEIGHT);
         telemetry.addData("CONTOUR_CENTER", CONTOUR_CENTER);
         telemetry.addData("CONTOUR_ANGLE", CONTOUR_ANGLE);
+
         // end of color telemetry
         telemetry.update();
     }
