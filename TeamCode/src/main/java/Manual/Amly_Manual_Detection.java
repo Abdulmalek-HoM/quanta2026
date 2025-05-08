@@ -445,11 +445,11 @@ public class Amly_Manual_Detection extends LinearOpMode{
      * Describe this function...
      */
     private void Specimen_Intake() {
-        tilting.setPosition(0.2);
+        tilting.setPosition(0.3);
         sleep(300);
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
-        Slides(0, 3000);
+        Slides(500, 3000);
         sleep(500);
         ArmBase(0, 1);
     }
@@ -459,12 +459,12 @@ public class Amly_Manual_Detection extends LinearOpMode{
      */
     private void Specimen_Outake() {
         gripperR.setPosition(Gripper_Close);
-//        sleep(700);
+        sleep(700);
         ArmBase(500, 1);
-        gripperL.setPosition(0);
-        tilting.setPosition(0.55);
-
         sleep(500);
+
+        tilting.setPosition(0.55);
+        gripperL.setPosition(0);
         Slides(500, 3000);
     }
 
@@ -485,7 +485,7 @@ public class Amly_Manual_Detection extends LinearOpMode{
      */
     private void Ground_Grab() {
         gripperL.setPosition(1);
-        tilting.setPosition(0.70);
+        tilting.setPosition(0.80);
         sleep(500);
         gripperR.setPosition(1);
         sleep(300);

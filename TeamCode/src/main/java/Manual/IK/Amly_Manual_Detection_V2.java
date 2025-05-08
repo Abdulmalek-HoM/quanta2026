@@ -146,12 +146,12 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                 //.setTargetColorRange(ColorRange.RED)
                 .setContourMode(ColorBlobLocatorProcessor.ContourMode.EXTERNAL_ONLY)    // exclude blobs inside blobs
                 //.setRoi(ImageRegion.asUnityCenterCoordinates(-0.5, 0.5, 0.5, -0.5))  // search central 1/4 of camera view
-                .setRoi(ImageRegion.asImageCoordinates(210, 145,  285, 220))
+                .setRoi(ImageRegion.asImageCoordinates(200, 160,  275, 290))
 
                 .setDrawContours(true)                        // Show contours on the Stream Preview
-                .setBlurSize(3)                               // Smooth the transitions between different colors in image
-                .setErodeSize(3) // For Low Quallity 2 to 4
-                .setDilateSize(4) // For Low Quallity 2 to 4
+                .setBlurSize(2)  // too much blurring                             // Smooth the transitions between different colors in image
+                .setErodeSize(3) // For Low Quality 2 to 4
+                .setDilateSize(3) // For Low Quality 2 to 4
 
                 .build();
 
@@ -189,18 +189,18 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
 
             ColorBlobLocatorProcessor.Util.filterByArea(2000, 5000, blobs);  // filter out very small blobs.
             telemetry.addLine(" Area Density Aspect  Center");
+
             org.opencv.core.Size myBoxFitSize;
             for(ColorBlobLocatorProcessor.Blob b : blobs) {
                 RotatedRect boxFit = b.getBoxFit();
                 telemetry.addLine(String.format("%5d  %4.2f   %5.2f  (%3d,%3d)",
                         b.getContourArea(), b.getDensity(), b.getAspectRatio(), (int) boxFit.center.x, (int) boxFit.center.y));
                 myBoxFitSize = boxFit.size;
+
                 telemetry.addData("width ", myBoxFitSize.width);
                 telemetry.addData("height ", myBoxFitSize.height);
                 telemetry.addData("angle ", boxFit.angle);
                 telemetry.addData("area ", myBoxFitSize.area());
-
-
             }
             telemetry.update();
 
@@ -224,10 +224,10 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                     imu_IMU.resetYaw();
                 }
                 if (gamepad1.left_bumper) {
-                    multiplier=0.2;
+                    multiplier=0.3;
 
                 } else {
-                    multiplier=0.5;
+                    multiplier=0.6;
                 }
                 data();
                 if (gamepad1.dpad_right) {
@@ -275,32 +275,6 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                     telemetry.addData("GRP1", ARM12);
                 }
 
-
-            List<ColorBlobLocatorProcessor.Blob> blobs = colorLocator.getBlobs();
-            ColorBlobLocatorProcessor.Util.filterByArea(2000, 5000, blobs);  // filter out very small blobs.
-
-            org.opencv.core.Size myBoxFitSize;
-            for (ColorBlobLocatorProcessor.Blob b : blobs) {
-                RotatedRect boxFit = b.getBoxFit();
-                myBoxFitSize = boxFit.size;
-                //AREA = b.getContour().size().area();
-                AREA = myBoxFitSize.area();
-                WIDTH = myBoxFitSize.width;
-                HEIGHT = myBoxFitSize.height;
-                CENTER_X = (int) boxFit.center.x;
-                CENTER_Y = (int) boxFit.center.y;
-                ANGLE = boxFit.angle;
-
-
-                // If statements to create the logic of selecting the Correct Oriented Sample
-                CONTOUR_AREA = 5000 > AREA && AREA > 2000;
-                CONTOUR_WIDTH = 90 > WIDTH && WIDTH > 40;
-                CONTOUR_HEIGHT = 80 > HEIGHT && HEIGHT > 30;
-                CONTOUR_CENTER = 290 > CENTER_X && CENTER_X > 200 && 210 > CENTER_Y && CENTER_Y > 150;
-                CONTOUR_ANGLE = 100 > ANGLE && ANGLE > 40;
-            }
-//                           .setRoi(ImageRegion.asImageCoordinates(200, 50,  300, 280))
-
                 if (gamepad1.triangle && Sample_Intake2 == 0) {
                     Sample_Intake();
                     sleep(200);
@@ -312,32 +286,52 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                     Sample_Intake2 = 0;
                 }
 
-            if (CONTOUR_AREA && CONTOUR_WIDTH && CONTOUR_HEIGHT && CONTOUR_CENTER && CONTOUR_ANGLE){
+//                detection();
 
-                leftFront.setPower(0);
-                rightFront.setPower(0);
-                leftBack.setPower(0);
-                rightBack.setPower(0);
-                gamepad1.rumble(500);
+                List<ColorBlobLocatorProcessor.Blob> blobs = colorLocator.getBlobs();
+                ColorBlobLocatorProcessor.Util.filterByArea(500, 5000, blobs);  // filter out very small blobs.
 
-                Sample_Intake();
+                org.opencv.core.Size myBoxFitSize;
+                for (ColorBlobLocatorProcessor.Blob b : blobs) {
+                    RotatedRect boxFit = b.getBoxFit();
+                    myBoxFitSize = boxFit.size;
+                    //AREA = b.getContour().size().area();
+                    AREA = myBoxFitSize.area();
+                    WIDTH = myBoxFitSize.width;
+                    HEIGHT = myBoxFitSize.height;
+                    CENTER_X = (int) boxFit.center.x;
+                    CENTER_Y = (int) boxFit.center.y;
+                    ANGLE = boxFit.angle;
 
-                sleep(1500);
-                Ground_Grab();
-                sleep(500);
 
-
-                for (int i = 0; i < 2; i++) {
-                    CONTOUR_AREA = false;
-                    CONTOUR_WIDTH = false;
-                    CONTOUR_HEIGHT = false;
-                    CONTOUR_CENTER = false;
-                    CONTOUR_ANGLE = false;
+                    // If statements to create the logic of selecting the Correct Oriented Sample
+                    CONTOUR_AREA = 5000 > AREA && AREA > 2000;
+                    CONTOUR_WIDTH = 90 > WIDTH && WIDTH > 40;
+                    CONTOUR_HEIGHT = 80 > HEIGHT && HEIGHT > 30;
+                    CONTOUR_CENTER = 290 > CENTER_X && CENTER_X > 200 && 230 > CENTER_Y && CENTER_Y > 170;
+                    CONTOUR_ANGLE = 100 > ANGLE && ANGLE > 40;
                 }
 
+                if (CONTOUR_AREA && CONTOUR_WIDTH && CONTOUR_HEIGHT && CONTOUR_CENTER && CONTOUR_ANGLE){
+
+//                leftFront.setPower(0);
+//                rightFront.setPower(0);
+//                leftBack.setPower(0);
+//                rightBack.setPower(0);
+                gamepad1.rumble(500);
+
+                    for (int i = 0; i < 2; i++) {
+                        CONTOUR_AREA = false;
+                        CONTOUR_WIDTH = false;
+                        CONTOUR_HEIGHT = false;
+                        CONTOUR_CENTER = false;
+                        CONTOUR_ANGLE = false;
+                    }
 
 
-            }
+
+
+                }
             if (gamepad1.cross && CONTOUR_AREA && CONTOUR_WIDTH && CONTOUR_HEIGHT && CONTOUR_CENTER && CONTOUR_ANGLE) {
 
                 Sample_Intake();
@@ -356,10 +350,6 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
 
 
             }
-
-//                else {
-//                        Home_Position();
-//                }
 
             }
         }
@@ -434,7 +424,7 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
     private void Sample_Intake() {
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
-        tilting.setPosition(0.4);
+        tilting.setPosition(0.55);
         ArmBase(0, 1);
         sleep(1000);
         Slides(3000, 3000);
@@ -444,11 +434,11 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
      * Describe this function...
      */
     private void Specimen_Intake() {
-        tilting.setPosition(0.2);
+        tilting.setPosition(0.35);
         sleep(300);
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
-        Slides(0, 3000);
+        Slides(500, 3000);
         sleep(500);
         ArmBase(0, 1);
     }
@@ -458,12 +448,12 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
      */
     private void Specimen_Outake() {
         gripperR.setPosition(Gripper_Close);
-//        sleep(700);
+        sleep(700);
         ArmBase(500, 1);
-        gripperL.setPosition(0);
-        tilting.setPosition(0.55);
-
         sleep(500);
+
+        tilting.setPosition(0.60);
+        gripperL.setPosition(0);
         Slides(500, 3000);
     }
 
@@ -493,36 +483,6 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
     }
 
     private void data() {
-        ColorBlobLocatorProcessor colorLocator = new ColorBlobLocatorProcessor.Builder()
-                .setTargetColorRange(ColorRange.BLUE)         // use a predefined color match
-                //.setTargetColorRange(ColorRange.RED)
-                .setContourMode(ColorBlobLocatorProcessor.ContourMode.EXTERNAL_ONLY)    // exclude blobs inside blobs
-                //.setRoi(ImageRegion.asUnityCenterCoordinates(-0.5, 0.5, 0.5, -0.5))  // search central 1/4 of camera view
-                .setRoi(ImageRegion.asImageCoordinates(110, 110,  190, 180))
-
-                .setDrawContours(true)                        // Show contours on the Stream Preview
-                .setBlurSize(5)                               // Smooth the transitions between different colors in image
-                .setErodeSize(4) // For Low Quallity 2 to 4
-                .setDilateSize(4) // For Low Quallity 2 to 4
-
-                .build();
-
-        List<ColorBlobLocatorProcessor.Blob> blobs = colorLocator.getBlobs();
-
-        ColorBlobLocatorProcessor.Util.filterByArea(3000, 7000, blobs);  // filter out very small blobs.
-        telemetry.addLine(" Area Density Aspect  Center");
-        org.opencv.core.Size myBoxFitSize;
-
-        for(ColorBlobLocatorProcessor.Blob b : blobs) {
-            RotatedRect boxFit = b.getBoxFit();
-            telemetry.addLine(String.format("%5d  %4.2f   %5.2f  (%3d,%3d)",
-                    b.getContourArea(), b.getDensity(), b.getAspectRatio(), (int) boxFit.center.x, (int) boxFit.center.y));
-            myBoxFitSize = boxFit.size;
-            telemetry.addData("width", myBoxFitSize.width);
-            telemetry.addData("height", myBoxFitSize.height);
-            telemetry.addData("angle", boxFit.angle);
-
-        }
 
         telemetry.addData("IMU Yaw:", _7ByawPitchRollAnglesVariable_7D.getYaw(AngleUnit.DEGREES));
         telemetry.addData("rotX", rotX);
@@ -541,7 +501,7 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
 
         telemetry.addData("SlideL Current", ((DcMotorEx) SlideL).getCurrent(CurrentUnit.AMPS));
         telemetry.addData("SlideR Current", ((DcMotorEx) SlideR).getCurrent(CurrentUnit.AMPS));
-
+//        detection();
         //////// testing telemetry with color angle detection
         telemetry.addData("CONTOUR_AREA", CONTOUR_AREA);
         telemetry.addData("CONTOUR_WIDTH", CONTOUR_WIDTH);
@@ -552,4 +512,46 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
         telemetry.update();
     }
 
-}
+//    private void detection() {
+//        ColorBlobLocatorProcessor colorLocator = new ColorBlobLocatorProcessor.Builder()
+//                .setTargetColorRange(ColorRange.YELLOW)         // use a predefined color match
+//                //.setTargetColorRange(ColorRange.RED)
+//                .setContourMode(ColorBlobLocatorProcessor.ContourMode.EXTERNAL_ONLY)    // exclude blobs inside blobs
+//                //.setRoi(ImageRegion.asUnityCenterCoordinates(-0.5, 0.5, 0.5, -0.5))  // search central 1/4 of camera view
+//                .setRoi(ImageRegion.asImageCoordinates(210, 145,  285, 220))
+//
+//                .setDrawContours(true)                        // Show contours on the Stream Preview
+//                .setBlurSize(3)                               // Smooth the transitions between different colors in image
+//                .setErodeSize(3) // For Low Quallity 2 to 4
+//                .setDilateSize(4) // For Low Quallity 2 to 4
+//
+//                .build();
+//
+//        List<ColorBlobLocatorProcessor.Blob> blobs = colorLocator.getBlobs();
+//        ColorBlobLocatorProcessor.Util.filterByArea(2000, 5000, blobs);  // filter out very small blobs.
+//
+//        org.opencv.core.Size myBoxFitSize;
+//        for (ColorBlobLocatorProcessor.Blob b : blobs) {
+//            RotatedRect boxFit = b.getBoxFit();
+//            myBoxFitSize = boxFit.size;
+//            //AREA = b.getContour().size().area();
+//            AREA = myBoxFitSize.area();
+//            WIDTH = myBoxFitSize.width;
+//            HEIGHT = myBoxFitSize.height;
+//            CENTER_X = (int) boxFit.center.x;
+//            CENTER_Y = (int) boxFit.center.y;
+//            ANGLE = boxFit.angle;
+//
+//
+//            // If statements to create the logic of selecting the Correct Oriented Sample
+//            CONTOUR_AREA = 5000 > AREA && AREA > 2000;
+//            CONTOUR_WIDTH = 90 > WIDTH && WIDTH > 40;
+//            CONTOUR_HEIGHT = 80 > HEIGHT && HEIGHT > 30;
+//            CONTOUR_CENTER = 290 > CENTER_X && CENTER_X > 200 && 210 > CENTER_Y && CENTER_Y > 150;
+//            CONTOUR_ANGLE = 100 > ANGLE && ANGLE > 40;
+//        }
+////                           .setRoi(ImageRegion.asImageCoordinates(200, 50,  300, 280))
+//
+//        }
+    }
+
