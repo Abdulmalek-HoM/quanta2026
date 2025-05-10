@@ -18,8 +18,10 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.opencv.ColorBlobLocatorProcessor;
 import org.firstinspires.ftc.vision.opencv.ColorRange;
+import org.firstinspires.ftc.vision.opencv.ColorSpace;
 import org.firstinspires.ftc.vision.opencv.ImageRegion;
 import org.opencv.core.RotatedRect;
+import org.opencv.core.Scalar;
 
 import java.util.List;
 
@@ -42,6 +44,8 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
 
     double Gripper_Close;
     double multiplier;
+    double Gripper;
+
     YawPitchRollAngles _7ByawPitchRollAnglesVariable_7D;
     double rotX;
     float x;
@@ -129,8 +133,8 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
         leftFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         leftBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         tilting.setPosition(0);
-        gripperL.setPosition(0);
-        Gripper_Close = 0.7;
+        gripperL.setPosition(1);
+        Gripper_Close = 0.6;
 
         gripperR.setPosition(Gripper_Close);
         multiplier = 0.7;
@@ -138,20 +142,25 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
         Slides2 = 0;
         //hang = 1;
         ARM12 = 0;
+        Gripper=0;
 
-
+        final ColorRange Custome_Blue = new ColorRange(
+                ColorSpace.YCrCb,
+                new Scalar( 50,   100, 140),
+                new Scalar(150, 130, 200)
+        );
         //////// The foll0wing lines are for color detection portal ///////
         ColorBlobLocatorProcessor colorLocator = new ColorBlobLocatorProcessor.Builder()
-                .setTargetColorRange(ColorRange.YELLOW)         // use a predefined color match
-                //.setTargetColorRange(ColorRange.RED)
+                .setTargetColorRange(Custome_Blue)         // use a predefined color match
+                .setTargetColorRange(ColorRange.BLUE)
                 .setContourMode(ColorBlobLocatorProcessor.ContourMode.EXTERNAL_ONLY)    // exclude blobs inside blobs
                 //.setRoi(ImageRegion.asUnityCenterCoordinates(-0.5, 0.5, 0.5, -0.5))  // search central 1/4 of camera view
                 .setRoi(ImageRegion.asImageCoordinates(200, 160,  275, 290))
 
                 .setDrawContours(true)                        // Show contours on the Stream Preview
-                .setBlurSize(2)  // too much blurring                             // Smooth the transitions between different colors in image
-                .setErodeSize(3) // For Low Quality 2 to 4
-                .setDilateSize(3) // For Low Quality 2 to 4
+                .setBlurSize(5)  // too much blurring                             // Smooth the transitions between different colors in image
+                .setErodeSize(5) // For Low Quality 2 to 4
+                .setDilateSize(5) // For Low Quality 2 to 4
 
                 .build();
 
@@ -187,7 +196,7 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
             // Read the current list
             List<ColorBlobLocatorProcessor.Blob> blobs = colorLocator.getBlobs();
 
-            ColorBlobLocatorProcessor.Util.filterByArea(2000, 5000, blobs);  // filter out very small blobs.
+            ColorBlobLocatorProcessor.Util.filterByArea(700, 8000, blobs);  // filter out very small blobs.
             telemetry.addLine(" Area Density Aspect  Center");
 
             org.opencv.core.Size myBoxFitSize;
@@ -224,7 +233,7 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                     imu_IMU.resetYaw();
                 }
                 if (gamepad1.left_bumper) {
-                    multiplier=0.3;
+                    multiplier=0.25;
 
                 } else {
                     multiplier=0.6;
@@ -232,39 +241,44 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                 data();
                 if (gamepad1.dpad_right) {
                     gripperR.setPosition(Gripper_Close);
-                    sleep(300);
+//                    sleep(300);
                 }
                 if (gamepad1.dpad_left) {
                     gripperR.setPosition(0.2);
-                    sleep(300);
+//                    sleep(300);
                 }
 
                 if (gamepad1.dpad_up) {
                     Specimen_Outake();
-                    sleep(500);
+                    Gripper=0;
+//                    sleep(500);
                 }
                 if (gamepad1.dpad_down) {
                     Specimen_Intake();
-                    sleep(500);
+                    Gripper=0;
+//                    sleep(500);
                 }
                 if (gamepad1.circle && Slides2 == 0) {
                     // Sample High
                     Sample_High();
-                    sleep(500);
                     Slides2 = 1;
+                    Gripper=0;
+//                    sleep(500);
+
                 }
                 if (gamepad1.circle && Slides2 == 1) {
                     Home_Position();
                     // Home Position
-                    sleep(500);
                     Slides2 = 0;
+                    Gripper=0;
+//                    sleep(500);
                 }
                 if (gamepad1.left_stick_button) {
                     Home_Position();
                     Sample_Intake2 = 0;
                     Slides2 = 0;
-
-                    sleep(500);
+                    Gripper =0;
+//                    sleep(500);
                 }
                 if (gamepad1.right_trigger > 0.1 && gamepad1.left_trigger <= 0.1) {
                     ARM12 = ARM12 + 10;
@@ -279,17 +293,39 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                     Sample_Intake();
                     sleep(200);
                     Sample_Intake2 = 1;
+                    Gripper=0;
                 }
                 if (gamepad1.triangle && Sample_Intake2 == 1) {
                     Ground_Grab();
                     sleep(200);
                     Sample_Intake2 = 0;
+                    Gripper=0;
                 }
+                if (gamepad1.touchpad && Gripper==0){
+                    gripperL.setPosition(0.5);
+                    Gripper=1;
+                    sleep(1000);
+
+                }
+                if (gamepad1.touchpad && Gripper==1){
+                    gripperL.setPosition(0.3);
+                    Gripper=2;
+                    sleep(1000);
+
+                }
+                if (gamepad1.touchpad && Gripper==2){
+                    gripperL.setPosition(1);
+                    Gripper=0;
+                    sleep(1000);
+
+
+                }
+
 
 //                detection();
 
                 List<ColorBlobLocatorProcessor.Blob> blobs = colorLocator.getBlobs();
-                ColorBlobLocatorProcessor.Util.filterByArea(500, 5000, blobs);  // filter out very small blobs.
+                ColorBlobLocatorProcessor.Util.filterByArea(700, 8000, blobs);  // filter out very small blobs.
 
                 org.opencv.core.Size myBoxFitSize;
                 for (ColorBlobLocatorProcessor.Blob b : blobs) {
@@ -305,10 +341,10 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
 
 
                     // If statements to create the logic of selecting the Correct Oriented Sample
-                    CONTOUR_AREA = 5000 > AREA && AREA > 2000;
-                    CONTOUR_WIDTH = 90 > WIDTH && WIDTH > 40;
+                    CONTOUR_AREA = 8000 > AREA && AREA > 700;
+                    CONTOUR_WIDTH = 99 > WIDTH && WIDTH > 40;
                     CONTOUR_HEIGHT = 80 > HEIGHT && HEIGHT > 30;
-                    CONTOUR_CENTER = 290 > CENTER_X && CENTER_X > 200 && 230 > CENTER_Y && CENTER_Y > 170;
+                    CONTOUR_CENTER = 290 > CENTER_X && CENTER_X > 200 && 230 > CENTER_Y && CENTER_Y > 200;
                     CONTOUR_ANGLE = 100 > ANGLE && ANGLE > 40;
                 }
 
@@ -337,9 +373,6 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                 Sample_Intake();
                 sleep(1000);
                 Ground_Grab();
-                sleep(500);
-
-
                 for (int i = 0; i < 2; i++) {
                     CONTOUR_AREA = false;
                     CONTOUR_WIDTH = false;
@@ -347,6 +380,8 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                     CONTOUR_CENTER = false;
                     CONTOUR_ANGLE = false;
                 }
+                Gripper=0;
+
 
 
             }
@@ -424,9 +459,9 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
     private void Sample_Intake() {
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
-        tilting.setPosition(0.55);
+        tilting.setPosition(0.45);
         ArmBase(0, 1);
-        sleep(1000);
+//        sleep(1000);
         Slides(3000, 3000);
     }
 
@@ -434,13 +469,17 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
      * Describe this function...
      */
     private void Specimen_Intake() {
-        tilting.setPosition(0.35);
+        tilting.setPosition(0.85);
         sleep(300);
+
+        ArmBase(0, 1);
+        sleep(300);
+
+        tilting.setPosition(0.35);
+//        sleep(500);
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
-        Slides(500, 3000);
-        sleep(500);
-        ArmBase(0, 1);
+        Slides(0, 3000);
     }
 
     /**
@@ -448,13 +487,13 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
      */
     private void Specimen_Outake() {
         gripperR.setPosition(Gripper_Close);
-        sleep(700);
-        ArmBase(500, 1);
         sleep(500);
+        ArmBase(500, 1);
+//        sleep(500);
 
         tilting.setPosition(0.60);
-        gripperL.setPosition(0);
-        Slides(500, 3000);
+        gripperL.setPosition(1);
+        Slides(0, 3000);
     }
 
     /**
@@ -462,43 +501,46 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
      */
     private void Sample_High() {
         gripperR.setPosition(Gripper_Close);
-        gripperL.setPosition(0);
-        tilting.setPosition(0.3);
-        ArmBase(220, 1);
-        sleep(1000);
-        Slides(4000, 3000);
+        gripperL.setPosition(1);
+        tilting.setPosition(0.5);
+        ArmBase(240, 1);
+        sleep(500);
+        Slides(1200, 3000);
     }
 
     /**
      * Describe this function...
      */
     private void Ground_Grab() {
-        gripperL.setPosition(1);
-        tilting.setPosition(0.70);
+        tilting.setPosition(0.8 );
         sleep(500);
         gripperR.setPosition(1);
         sleep(300);
         tilting.setPosition(0.3);
+        gripperL.setPosition(1);
+
 //        Home_Position();
     }
 
     private void data() {
 
-        telemetry.addData("IMU Yaw:", _7ByawPitchRollAnglesVariable_7D.getYaw(AngleUnit.DEGREES));
+        telemetry.addData("IMU Yaw right now:", _7ByawPitchRollAnglesVariable_7D.getYaw(AngleUnit.DEGREES));
         telemetry.addData("rotX", rotX);
         telemetry.addData("rotY", rotY);
         telemetry.addData("Y", y);
         telemetry.addData("X", x);
-        telemetry.addData("Theta (Radians)", _7ByawPitchRollAnglesVariable_7D.getYaw(AngleUnit.RADIANS));
+        telemetry.addData("Theta at the moment (Radians)", _7ByawPitchRollAnglesVariable_7D.getYaw(AngleUnit.RADIANS));
         telemetry.addData("rx", rx);
         telemetry.addData("Multiplier (Speed)", multiplier);
+        telemetry.addData("Gripper Position", Gripper);
+
         telemetry.addData("BaseL Ticks", BaseL.getCurrentPosition());
         telemetry.addData("BaseR Ticks", BaseR.getCurrentPosition());
-        telemetry.addData("gripperArm Current", ((DcMotorEx) BaseL).getCurrent(CurrentUnit.AMPS));
-        telemetry.addData("armBase Current", ((DcMotorEx) BaseR).getCurrent(CurrentUnit.AMPS));
+        telemetry.addData("BaseL Current", ((DcMotorEx) BaseL).getCurrent(CurrentUnit.AMPS));
+        telemetry.addData("BaseR Current", ((DcMotorEx) BaseR).getCurrent(CurrentUnit.AMPS));
+
         telemetry.addData("SlideL Ticks", SlideL.getCurrentPosition());
         telemetry.addData("SlideR Ticks", SlideR.getCurrentPosition());
-
         telemetry.addData("SlideL Current", ((DcMotorEx) SlideL).getCurrent(CurrentUnit.AMPS));
         telemetry.addData("SlideR Current", ((DcMotorEx) SlideR).getCurrent(CurrentUnit.AMPS));
 //        detection();
@@ -508,6 +550,7 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
         telemetry.addData("CONTOUR_HEIGHT", CONTOUR_HEIGHT);
         telemetry.addData("CONTOUR_CENTER", CONTOUR_CENTER);
         telemetry.addData("CONTOUR_ANGLE", CONTOUR_ANGLE);
+
         // end of color telemetry
         telemetry.update();
     }
