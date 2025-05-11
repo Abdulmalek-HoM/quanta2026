@@ -190,6 +190,7 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
          */
         while (opModeInInit())
         {
+            ARM12=0;
 
             telemetry.addData("preview on/off", "... Camera Stream\n");
 
@@ -282,10 +283,13 @@ public class Amly_Manual_Detection_V2 extends LinearOpMode{
                 }
                 if (gamepad1.right_trigger > 0.1 && gamepad1.left_trigger <= 0.1) {
                     ARM12 = ARM12 + 10;
+                    ArmBase(500+ARM12,1);
                     telemetry.addData("GRP", ARM12);
                 }
                 if (gamepad1.left_trigger > 0.1 && gamepad1.right_trigger <= 0.1) {
                     ARM12 = ARM12 - 10;
+                    ArmBase(500+ARM12,1);
+
                     telemetry.addData("GRP1", ARM12);
                 }
 
