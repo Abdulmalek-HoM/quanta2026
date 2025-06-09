@@ -284,12 +284,12 @@ public class Summer_Manual extends LinearOpMode{
                 }
                 if (gamepad1.right_trigger > 0.1 && gamepad1.left_trigger <= 0.1) {
                     ARM12 = ARM12 + 10;
-                    ArmBase(500+ARM12,1);
+                    ArmBase(380+ARM12,1);
                     telemetry.addData("GRP", ARM12);
                 }
                 if (gamepad1.left_trigger > 0.1 && gamepad1.right_trigger <= 0.1) {
                     ARM12 = ARM12 - 10;
-                    ArmBase(500+ARM12,1);
+                    ArmBase(380+ARM12,1);
 
                     telemetry.addData("GRP1", ARM12);
                 }
@@ -455,7 +455,7 @@ public class Summer_Manual extends LinearOpMode{
 
         Slides(0, 3000);
         sleep(1500);
-        ArmBase(0, 0.5);
+        ArmBase(0, 1);
     }
 
     /**
@@ -509,8 +509,8 @@ public class Summer_Manual extends LinearOpMode{
         gripperL.setPosition(1);
         tilting.setPosition(0.5);
         ArmBase(380, 1);
-        sleep(500);
-        Slides(1000, 3000);
+        sleep(800);
+        Slides(3000, 3000);
     }
 
     /**
