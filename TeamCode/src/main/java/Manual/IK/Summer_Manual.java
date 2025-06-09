@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 
@@ -103,8 +104,8 @@ public class Summer_Manual extends LinearOpMode{
         BaseL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         BaseR.setDirection(DcMotor.Direction.REVERSE);
         BaseR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        SlideL.setDirection(DcMotor.Direction.REVERSE);
-        SlideR.setDirection(DcMotor.Direction.FORWARD);
+        SlideL.setDirection(DcMotor.Direction.FORWARD);
+        SlideR.setDirection(DcMotor.Direction.REVERSE);
         SlideR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         SlideL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         // Reverse one of the drive motors.
@@ -492,7 +493,7 @@ public class Summer_Manual extends LinearOpMode{
     private void Specimen_Outake() {
         gripperR.setPosition(Gripper_Close);
         sleep(500);
-        ArmBase(500, 1);
+        ArmBase(380, 1);
 //        sleep(500);
 
         tilting.setPosition(0.60);
@@ -507,9 +508,9 @@ public class Summer_Manual extends LinearOpMode{
         gripperR.setPosition(Gripper_Close);
         gripperL.setPosition(1);
         tilting.setPosition(0.5);
-        ArmBase(240, 1);
+        ArmBase(380, 1);
         sleep(500);
-        Slides(1200, 3000);
+        Slides(1000, 3000);
     }
 
     /**
