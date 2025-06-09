@@ -25,7 +25,7 @@ import org.opencv.core.Scalar;
 
 import java.util.List;
 
-@TeleOp(name = "Amly Manula Detection V2")
+@TeleOp(name = "Summer Manula V1")
 
 public class Summer_Manual extends LinearOpMode{
 
