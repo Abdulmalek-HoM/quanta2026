@@ -42,6 +42,8 @@ public class Summer_Manual extends LinearOpMode{
     private Servo tilting;
     private Servo gripperL;
     private Servo gripperR;
+    private Servo SlideServo;
+
 
     double Gripper_Close;
     double multiplier;
@@ -91,6 +93,8 @@ public class Summer_Manual extends LinearOpMode{
         leftFront = hardwareMap.get(DcMotor.class, "leftFront");
         leftBack = hardwareMap.get(DcMotor.class, "leftBack");
         tilting = hardwareMap.get(Servo.class, "tilting");
+        SlideServo = hardwareMap.get(Servo.class, "SlideServo");
+
         gripperL = hardwareMap.get(Servo.class, "gripperL");
         gripperR = hardwareMap.get(Servo.class, "gripperR");
 
@@ -135,6 +139,8 @@ public class Summer_Manual extends LinearOpMode{
         leftBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         tilting.setPosition(0);
         gripperL.setPosition(1);
+        SlideServo.setPosition(0.7);
+
         Gripper_Close = 0.6;
 
         gripperR.setPosition(Gripper_Close);
@@ -450,6 +456,8 @@ public class Summer_Manual extends LinearOpMode{
 
     private void Home_Position() {
         gripperR.setPosition(Gripper_Close);
+        SlideServo.setPosition(0.7);
+
         gripperL.setPosition(1);
         tilting.setPosition(0.4);
 
@@ -464,7 +472,9 @@ public class Summer_Manual extends LinearOpMode{
     private void Sample_Intake() {
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
-        tilting.setPosition(0.45);
+        tilting.setPosition(0.8);
+        SlideServo.setPosition(0.7);
+
         ArmBase(0, 1);
 //        sleep(1000);
         Slides(3000, 3000);
@@ -474,13 +484,12 @@ public class Summer_Manual extends LinearOpMode{
      * Describe this function...
      */
     private void Specimen_Intake() {
+        SlideServo.setPosition(0.7);
         tilting.setPosition(0.85);
         sleep(300);
-
         ArmBase(0, 1);
         sleep(300);
-
-        tilting.setPosition(0.35);
+        tilting.setPosition(0.55);
 //        sleep(500);
         gripperR.setPosition(0.2);
         gripperL.setPosition(1);
@@ -491,6 +500,7 @@ public class Summer_Manual extends LinearOpMode{
      * Describe this function...
      */
     private void Specimen_Outake() {
+        SlideServo.setPosition(0.7);
         gripperR.setPosition(Gripper_Close);
         sleep(500);
         ArmBase(380, 1);
@@ -509,6 +519,8 @@ public class Summer_Manual extends LinearOpMode{
         gripperL.setPosition(1);
         tilting.setPosition(0.5);
         ArmBase(380, 1);
+        SlideServo.setPosition(0.15);
+
         sleep(800);
         Slides(3000, 3000);
     }
@@ -517,10 +529,15 @@ public class Summer_Manual extends LinearOpMode{
      * Describe this function...
      */
     private void Ground_Grab() {
-        tilting.setPosition(0.8 );
+        tilting.setPosition(0.8);
+        SlideServo.setPosition(0.15);
+
         sleep(500);
+
         gripperR.setPosition(1);
         sleep(300);
+        SlideServo.setPosition(0.7);
+
         tilting.setPosition(0.3);
         gripperL.setPosition(1);
 
