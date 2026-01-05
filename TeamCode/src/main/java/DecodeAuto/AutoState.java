@@ -1,0 +1,11 @@
+package DecodeAuto;
+
+public enum AutoState {
+    IDLE,
+    DETECTING_RANDOMIZATION,
+    THROWING_ARTIFACTS,
+    ALIGNING_FOR_SHOOTING,
+    SHOOTING,
+    LOCALIZING,
+    PARKING
+}
