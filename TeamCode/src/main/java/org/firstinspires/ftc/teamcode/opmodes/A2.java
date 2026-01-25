@@ -35,10 +35,10 @@ public class A2 extends OpMode {
     private boolean lastCircle = false;
     private boolean lastUp = false;
     private boolean lastDown = false;
-    
+
     // Auto Assist State
     private boolean isAutoAligning = false;
-    private int targetGoalId = TagConfiguration.ID_RED_SHOOTING_GOAL_CENTER; // Default to Red for Test
+    private int targetGoalId = TagConfiguration.ID_RED_SHOOTING_GOAL; // Default to Red for Test
 
     // Drivetrain Multiplier
     private double multiplier = 0.5;
@@ -85,21 +85,22 @@ public class A2 extends OpMode {
         // =========================================================================
         // DRIVETRAIN LOGIC
         // =========================================================================
-        
+
         // Auto Align Button (Hold Y / Triangle)
         if (gamepad1.y) {
             isAutoAligning = true;
-            
+
             // Get override powers from Navigator
             // Assuming RED Goal for A2 test. Can be toggled if needed.
             double[] autoPowers = tagNavigator.getAlignmentPowers(targetGoalId);
-            
+
             if (autoPowers != null) {
-                double drive  = autoPowers[0];
+                double drive = autoPowers[0];
                 double strafe = autoPowers[1];
-                double turn   = autoPowers[2];
-                
-                // Direct application of Omni powers (Robot centric for alignment usually works best)
+                double turn = autoPowers[2];
+
+                // Direct application of Omni powers (Robot centric for alignment usually works
+                // best)
                 moveRobot(drive, strafe, turn);
                 telemetry.addData("Auto Align", "Tracking Tag %d", targetGoalId);
             } else {
@@ -123,25 +124,24 @@ public class A2 extends OpMode {
             } else {
                 multiplier = 0.6;
             }
-            
+
             double x = gamepad1.left_stick_x;
-            double y = -gamepad1.left_stick_y; 
+            double y = -gamepad1.left_stick_y;
             double rx = gamepad1.right_stick_x;
 
             YawPitchRollAngles botAngles = imu.getRobotYawPitchRollAngles();
             double botHeading = -botAngles.getYaw(AngleUnit.RADIANS);
-            
+
             double rotX = x * Math.cos(botHeading) - y * Math.sin(botHeading);
             double rotY = x * Math.sin(botHeading) + y * Math.cos(botHeading);
 
             double denominator = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1);
-            
+
             leftFront.setPower(((rotY + rotX + rx) / denominator) * multiplier);
             rightFront.setPower(((rotY - rotX - rx) / denominator) * multiplier);
             leftBack.setPower(((rotY - rotX + rx) / denominator) * multiplier);
             rightBack.setPower(((rotY + rotX - rx) / denominator) * multiplier);
         }
-
 
         // =========================================================================
         // REVOLVER LOGIC
@@ -149,11 +149,11 @@ public class A2 extends OpMode {
 
         // 1. Intake
         if (gamepad1.right_trigger > 0.1) {
-             revolver.setIntakePower(1.0);
+            revolver.setIntakePower(1.0);
         } else if (gamepad1.left_trigger > 0.1) {
-             revolver.setIntakePower(-1.0);
+            revolver.setIntakePower(-1.0);
         } else {
-             revolver.setIntakePower(0);
+            revolver.setIntakePower(0);
         }
 
         // 2. Index
@@ -172,13 +172,13 @@ public class A2 extends OpMode {
             }
         }
         lastCircle = gamepad1.circle;
-        
+
         // 4. Kick
         if (gamepad1.left_bumper && !lastLeftBumper) {
-             revolver.kick();
+            revolver.kick();
         }
         lastLeftBumper = gamepad1.left_bumper;
-        
+
         // 5. Manual Trim
         if (gamepad1.dpad_up && !lastUp) {
             revolver.manualAdjust(5);
@@ -196,7 +196,7 @@ public class A2 extends OpMode {
         telemetry.addData("Auto Align", isAutoAligning ? "ACTIVE" : "OFF (Hold Y)");
         telemetry.update();
     }
-    
+
     @Override
     public void stop() {
         if (tagNavigator != null) {
@@ -205,10 +205,10 @@ public class A2 extends OpMode {
     }
 
     public void moveRobot(double x, double y, double yaw) {
-        double leftFrontPower    =  x -y -yaw;
-        double rightFrontPower   =  x +y +yaw;
-        double leftBackPower     =  x +y -yaw;
-        double rightBackPower    =  x -y +yaw;
+        double leftFrontPower = x - y - yaw;
+        double rightFrontPower = x + y + yaw;
+        double leftBackPower = x + y - yaw;
+        double rightBackPower = x - y + yaw;
 
         double max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
         max = Math.max(max, Math.abs(leftBackPower));

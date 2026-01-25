@@ -1,5 +1,7 @@
 package DecodeAuto;
 
+import android.util.Size;
+
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.Range;
 
@@ -16,45 +18,56 @@ public class AprilTagNavigator {
     private VisionPortal visionPortal;
     private AprilTagProcessor aprilTag;
     private AprilTagDetection desiredTag = null;
+    private int lastDetectedTagId = -1;
 
     // Drive constants (Adjustable)
-    final double DESIRED_DISTANCE = 12.0; 
-    final double SPEED_GAIN  =  0.02;
-    final double STRAFE_GAIN =  0.015;
-    final double TURN_GAIN   =  0.01;
+    final double DESIRED_DISTANCE = 12.0;
+    final double SPEED_GAIN = 0.02;
+    final double STRAFE_GAIN = 0.015;
+    final double TURN_GAIN = 0.01;
     final double MAX_AUTO_SPEED = 0.5;
-    final double MAX_AUTO_STRAFE= 0.5;
-    final double MAX_AUTO_TURN  = 0.3;
+    final double MAX_AUTO_STRAFE = 0.5;
+    final double MAX_AUTO_TURN = 0.3;
 
     public AprilTagNavigator(HardwareMap hardwareMap, String webcamName) {
         initAprilTag(hardwareMap, webcamName);
     }
 
     private void initAprilTag(HardwareMap hardwareMap, String webcamName) {
-        aprilTag = new AprilTagProcessor.Builder().build();
+        aprilTag = new AprilTagProcessor.Builder()
+                .setDrawAxes(true)
+                .setDrawTagOutline(true)
+                .setDrawTagID(true)
+                .build();
         aprilTag.setDecimation(2);
 
         if (webcamName != null) {
             visionPortal = new VisionPortal.Builder()
                     .setCamera(hardwareMap.get(WebcamName.class, webcamName))
                     .addProcessor(aprilTag)
+                    .setCameraResolution(new Size(640, 480))
+                    .setStreamFormat(VisionPortal.StreamFormat.MJPEG)
+                    .enableLiveView(true)
                     .build();
         } else {
-             visionPortal = new VisionPortal.Builder()
+            visionPortal = new VisionPortal.Builder()
                     .setCamera(BuiltinCameraDirection.BACK)
                     .addProcessor(aprilTag)
+                    .enableLiveView(true)
                     .build();
         }
     }
 
     /**
-     * Scans for tags and returns the detected RandomizationPattern based on IDs found.
+     * Scans for tags and returns the detected RandomizationPattern based on IDs
+     * found.
      * Returns UNKNOWN if no relevant tags are found.
      */
     public TagConfiguration.RandomizationPattern detectRandomizationPattern() {
         List<AprilTagDetection> currentDetections = aprilTag.getDetections();
         for (AprilTagDetection detection : currentDetections) {
             if (detection.metadata != null) {
+                lastDetectedTagId = detection.id;
                 TagConfiguration.RandomizationPattern pattern = TagConfiguration.getPatternFromId(detection.id);
                 if (pattern != TagConfiguration.RandomizationPattern.UNKNOWN) {
                     return pattern;
@@ -62,6 +75,15 @@ public class AprilTagNavigator {
             }
         }
         return TagConfiguration.RandomizationPattern.UNKNOWN;
+    }
+
+    /**
+     * Get the last detected AprilTag ID for telemetry.
+     * 
+     * @return Tag ID or -1 if none detected
+     */
+    public int getLastDetectedTagId() {
+        return lastDetectedTagId;
     }
 
     /**
@@ -83,15 +105,15 @@ public class AprilTagNavigator {
         }
 
         if (targetFound) {
-            double rangeError   = (desiredTag.ftcPose.range - DESIRED_DISTANCE);
+            double rangeError = (desiredTag.ftcPose.range - DESIRED_DISTANCE);
             double headingError = desiredTag.ftcPose.bearing;
-            double yawError     = desiredTag.ftcPose.yaw;
+            double yawError = desiredTag.ftcPose.yaw;
 
-            double drive  = Range.clip(rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
-            double turn   = Range.clip(headingError * TURN_GAIN, -MAX_AUTO_TURN, MAX_AUTO_TURN);
+            double drive = Range.clip(rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
+            double turn = Range.clip(headingError * TURN_GAIN, -MAX_AUTO_TURN, MAX_AUTO_TURN);
             double strafe = Range.clip(-yawError * STRAFE_GAIN, -MAX_AUTO_STRAFE, MAX_AUTO_STRAFE);
 
-            return new double[]{drive, strafe, turn};
+            return new double[] { drive, strafe, turn };
         }
 
         return null;
@@ -100,7 +122,7 @@ public class AprilTagNavigator {
     public AprilTagDetection getDesiredTag() {
         return desiredTag;
     }
-    
+
     public void stop() {
         if (visionPortal != null) {
             visionPortal.close();
