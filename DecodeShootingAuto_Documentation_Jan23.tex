@@ -17,18 +17,19 @@
 \definecolor{actioncolor}{RGB}{156, 39, 176}
 \definecolor{issuecolor}{RGB}{255, 87, 34}
 \definecolor{fixedcolor}{RGB}{76, 175, 80}
+\definecolor{warningcolor}{RGB}{255, 152, 0}
 
-% TikZ styles
+% TikZ styles - IMPROVED to match flowchart document
 \tikzstyle{startstop} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=startcolor!30, align=center]
 \tikzstyle{process} = [rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=processcolor!30, align=center]
 \tikzstyle{decision} = [diamond, minimum width=3.5cm, minimum height=1.2cm, text centered, draw=black, fill=decisioncolor!30, aspect=3, align=center, text width=2.5cm]
 \tikzstyle{action} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=actioncolor!30, align=center]
 \tikzstyle{arrow} = [thick,->,>=stealth, rounded corners]
-\tikzstyle{state} = [rectangle, rounded corners, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=blue!20, align=center, text width=3cm]
+\tikzstyle{state} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=blue!20, align=center, text width=3cm]
 
-\title{\textbf{DecodeShootingAuto v5.0}\\Complete System Documentation\\January 23, 2026 Updates}
+\title{\textbf{DecodeShootingAuto v5.1}\\Complete System Documentation\\January 27, 2026 Updates}
 \author{FTC Robot Autonomous System}
-\date{January 23, 2026}
+\date{January 27, 2026}
 
 \begin{document}
 
@@ -37,53 +38,378 @@
 \newpage
 
 % ============================================================================
-\section{Update Summary - January 23, 2026}
+\section{Update Summary - January 25-27, 2026}
 % ============================================================================
 
-\subsection{Major Changes Today}
+\subsection{Major Changes This Session}
 
 \begin{enumerate}
-    \item \textbf{Fixed Intake Timeout Issue} - Added 10-second timeout to prevent infinite hang
-    \item \textbf{Fixed Color Sensor Detection} - Implemented live sensor reading (\texttt{readColorNow()})
-    \item \textbf{Updated Purple Detection Logic} - Adjusted thresholds based on actual sensor data
-    \item \textbf{Created IntakeDebugOpMode} - Standalone testing for intake mechanisms
-    \item \textbf{Implemented Smart Intake System} - Pause-for-collection intelligence
-    \item \textbf{Fixed Navigation Issue} - Separated Roadrunner trajectory from manual control
+    \item \textbf{Fixed Shooter Power Control Method} - Identified velocity PID conflict
+    \item \textbf{Added AprilTag Detection Debugging} - Camera streaming wait and telemetry
+    \item \textbf{Created A3 OpMode} - Smart auto-indexing TeleOp with manual override
+    \item \textbf{Fixed Kicker Servo Positions} - Matched SimpleRevolver working values
+    \item \textbf{Fixed Kicker FSM Conflict} - Added flag to disable FSM kicker control
+    \item \textbf{Implemented Timer-Based Kicking} - Direct control in A3 bypassing FSM
 \end{enumerate}
 
 \subsection{Current Issues}
 
-\begin{tcolorbox}[colback=issuecolor!10, colframe=issuecolor, title=Known Issues]
-\begin{enumerate}[label=\textbf{Issue \arabic*:}]
-    \item \textbf{Robot doesn't move forward during SmartIntakeAction}
-    \begin{itemize}
-        \item Intake and indexing work correctly
-        \item Robot reaches intake position successfully
-        \item Likely causes:
-        \begin{itemize}
-            \item Battery/power too low
-            \item \texttt{moveSpeed = 0.15} too slow (wheels slipping)
-            \item \texttt{drive.setDrivePowers()} not working correctly
-        \end{itemize}
-        \item \textbf{Next steps}: Increase \texttt{moveSpeed} to 0.3, check battery voltage
-    \end{itemize}
-    
-    \item \textbf{Indexer sometimes requires manual toggle}
-    \begin{itemize}
-        \item \texttt{isIndexerAtTarget()} may not function correctly
-        \item Backup: timeout after 1200ms
-    \end{itemize}
+\begin{tcolorbox}[colback=warningcolor!10, colframe=warningcolor, title=Open Investigation]
+\textbf{Shooter Power Not Matching Commanded Value}\\
+Despite setting \texttt{SHOOTER\_POWER = 0.4}, the shooter appears to run at a higher speed.\\
+\textbf{Root Cause Under Investigation:}
+\begin{itemize}
+    \item \texttt{setShooterPower()} calls both \texttt{setVelocity()} AND \texttt{setPower()}
+    \item Velocity PID may override raw power setting
+    \item Currently using \texttt{setShooterPowerDirect()} to bypass velocity control
+    \item \textbf{More testing needed} to confirm actual motor behavior
+\end{itemize}
+\end{tcolorbox}
+
+\newpage
+% ============================================================================
+\section{Shooter Power Control Analysis}
+% ============================================================================
+
+\subsection{The Problem}
+
+User observed that despite setting \texttt{SHOOTER\_POWER = 0.4}, the shooter motor appeared to run at maximum speed.
+
+\subsection{Method Comparison}
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Method} & \textbf{Implementation} & \textbf{Effect} \\
+\hline
+\texttt{setShooterPower(power)} & \begin{tabular}[c]{@{}l@{}}\texttt{setVelocity(power * 3000)}\\\texttt{setPower(power)}\end{tabular} & Velocity PID active \\
+\hline
+\texttt{setShooterPowerDirect(power)} & \texttt{setPower(power)} & Raw PWM only \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Analysis}
+
+\begin{tcolorbox}[colback=issuecolor!10, colframe=issuecolor, title=Velocity PID Conflict]
+When \texttt{setShooterPower(0.4)} is called:
+\begin{enumerate}
+    \item \texttt{setVelocity(1200)} tells motor to maintain 1200 ticks/sec
+    \item \texttt{setPower(0.4)} is ignored because velocity mode is active
+    \item Motor PID drives hard to reach target velocity $\rightarrow$ appears at max power
 \end{enumerate}
 \end{tcolorbox}
+
+\subsection{Current Status}
+
+\begin{itemize}
+    \item Autonomous uses \texttt{setShooterPowerDirect(SHOOTER\_POWER)}
+    \item Manual mode (A1) uses \texttt{setShooterPower(0.67)}
+    \item \textbf{Needs Further Investigation:} Actual motor velocity vs commanded power
+\end{itemize}
+
+\newpage
+% ============================================================================
+\section{A3 OpMode - Smart Auto-Indexing}
+% ============================================================================
+
+\subsection{Overview}
+
+New TeleOp mode combining A1's manual controls with autonomous-style smart indexing.
+
+\subsection{Key Features}
+
+\begin{itemize}
+    \item \textbf{Auto-Indexing:} Detects balls during intake, rotates indexer automatically
+    \item \textbf{Manual Override:} Cross button and D-pad still work
+    \item \textbf{Direct Kicker Control:} Bypasses RevolverSubsystem FSM
+    \item \textbf{Edge Detection:} Prevents double-triggering with 800ms cooldown
+\end{itemize}
+
+\subsection{Control Mapping}
+
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Button} & \textbf{Function} \\
+\hline
+RT & Intake + Auto-index \\
+LT & Reverse intake \\
+Circle & Toggle shooter \\
+LB & Kick (timer-based) \\
+Cross & Manual index \\
+D-pad Up/Down & Manual trim $\pm$5 ticks \\
+RB & Slow drive mode \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Auto-Indexing Flow}
+
+\begin{center}
+\begin{tikzpicture}[node distance=1.8cm, auto]
+
+% Main vertical spine
+\node (rt) [startstop] {RT Pressed};
+\node (read) [process, below=of rt] {Read Color Sensor};
+\node (detect) [decision, below=of read] {Ball Detected?};
+\node (edge) [decision, below=of detect] {Just Entered?};
+\node (save) [process, below=of edge] {Save Color State};
+\node (cont) [startstop, below=of save, fill=processcolor!30] {Continue Loop};
+
+% Right branch for successful detection
+\node (cool) [decision, right=3.5cm of edge] {Cooldown OK?};
+\node (index) [action, below=of cool] {Index Next Slot};
+
+% Arrows - main spine
+\draw [arrow] (rt) -- (read);
+\draw [arrow] (read) -- (detect);
+\draw [arrow] (detect) -- node[left] {Yes} (edge);
+\draw [arrow] (edge) -- node[left] {No} (save);
+\draw [arrow] (save) -- (cont);
+
+% No detection path - route around edge node
+\draw [arrow] (detect.west) -- ++(-1.5,0) |- node[above left] {No} (save.west);
+
+% Edge detection to cooldown
+\draw [arrow] (edge) -- node[above] {Yes} (cool);
+
+% Cooldown paths
+\draw [arrow] (cool) -- node[right] {Yes} (index);
+\draw [arrow] (index.west) -- ++(-0.5,0) |- (save.east);
+
+% Cooldown No path
+\draw [arrow] (cool.south) -- ++(0,-0.5) -| node[below right] {No} (save.east);
+
+\end{tikzpicture}
+\end{center}
+
+\newpage
+% ============================================================================
+\section{Kicker Control - Fixes Applied}
+% ============================================================================
+
+\subsection{Problems Encountered}
+
+\begin{enumerate}
+    \item \textbf{Kicker Retracting Immediately:} FSM LOADING state constantly set kicker to retract
+    \item \textbf{Wrong Servo Positions:} RevolverSubsystem used different values than SimpleRevolver
+    \item \textbf{No Timer Sequence:} Direct \texttt{kickerEject()} had no timing control
+\end{enumerate}
+
+\subsection{Servo Position Correction}
+
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Position} & \textbf{SimpleRevolver (A1)} & \textbf{Old RevolverSubsystem} & \textbf{Fixed Value} \\
+\hline
+RETRACT & 0.3 & 0.5 & \textbf{0.3} \\
+EJECT & 0.8 & 1.0 & \textbf{0.8} \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Timer-Based Kick Sequence}
+
+Both SimpleRevolver (A1) and now A3 use this sequence:
+
+\begin{center}
+\begin{tikzpicture}[node distance=2cm, auto]
+
+% Horizontal flow
+\node (start) [startstop] {LB Pressed};
+\node (spool) [process, right=of start, text width=2.5cm] {0-500ms\\RETRACT\\(Spool Up)};
+\node (eject) [action, right=of spool, text width=2.5cm] {500-1100ms\\EJECT\\(600ms)};
+\node (retract) [process, right=of eject, text width=2.5cm] {1100-1700ms\\RETRACT\\(Safety)};
+\node (done) [startstop, right=of retract, fill=endcolor!30] {Done};
+
+% Simple straight arrows
+\draw [arrow] (start) -- (spool);
+\draw [arrow] (spool) -- (eject);
+\draw [arrow] (eject) -- (retract);
+\draw [arrow] (retract) -- (done);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{FSM Conflict Resolution}
+
+\begin{tcolorbox}[colback=fixedcolor!10, colframe=fixedcolor, title=Solution: Direct Control Flag]
+Added \texttt{disableFSMKickerControl} flag to RevolverSubsystem:
+\begin{verbatim}
+// In A3.init():
+revolver.disableFSMKickerControl = true;
+
+// In RevolverSubsystem.update() LOADING state:
+if (!disableFSMKickerControl) {
+    kicker.setPosition(KICKER_RETRACT_POS);
+}
+\end{verbatim}
+A3 directly controls kicker via \texttt{revolver.kicker.setPosition()}.
+\end{tcolorbox}
+
+\newpage
+% ============================================================================
+\section{AprilTag Detection Updates}
+% ============================================================================
+
+\subsection{Problem}
+
+AprilTag detection worked during init (camera preview showed tags) but failed during autonomous execution.
+
+\subsection{Fixes Applied}
+
+\begin{enumerate}
+    \item \textbf{Camera Streaming Wait:} Added wait loop during init to ensure VisionPortal is streaming
+    \item \textbf{Enhanced Telemetry:} Shows detection count and camera state during detection phase
+    \item \textbf{Made Vision Components Public:} \texttt{aprilTag} and \texttt{visionPortal} for telemetry access
+\end{enumerate}
+
+\subsection{Init Phase Monitoring}
+
+\begin{verbatim}
+// CRITICAL: Wait for camera to start streaming
+while (!isStarted() && !isStopRequested()) {
+    telemetry.addData("Camera Status", 
+        tagNavigator.visionPortal.getCameraState());
+    telemetry.addData("Detections", 
+        tagNavigator.aprilTag.getDetections().size());
+    telemetry.update();
+    sleep(20);
+}
+\end{verbatim}
+
+\subsection{Current Status}
+
+\begin{tcolorbox}[colback=warningcolor!10, colframe=warningcolor, title=Needs Testing]
+Camera streaming wait added. User should verify:
+\begin{itemize}
+    \item Camera shows \texttt{STREAMING} status during init
+    \item Detections count > 0 when tags visible
+    \item Tags detected during autonomous execution
+\end{itemize}
+\end{tcolorbox}
+
+\newpage
+% ============================================================================
+\section{RevolverSubsystem State Machine}
+% ============================================================================
+
+\subsection{State Diagram}
+
+\begin{center}
+\begin{tikzpicture}[node distance=2.5cm, auto]
+
+% Setup with wide spacing to avoid crossings
+\node (loading) [process, text width=2.5cm] {\textbf{LOADING}};
+
+% Right Column (Intake path)
+\node (indexing) [process, right=3.5cm of loading, text width=2.5cm] {\textbf{INDEXING}};
+\node (wait) [process, below=of indexing, text width=2.5cm] {\textbf{WAIT\_CLEAR}};
+
+% Center Bottom
+\node (full) [process, below=of loading, text width=2.5cm] {\textbf{FULL}};
+
+% Left Column (Shooting path)
+\node (align) [process, left=3.5cm of loading, text width=2.5cm] {\textbf{ALIGN}};
+\node (ready) [process, below=of align, text width=2.5cm] {\textbf{READY}};
+\node (shooting) [process, below=of ready, text width=2.5cm] {\textbf{SHOOTING}};
+
+% --- Transitions with Explicit Routing ---
+
+% 1. Loading -> Indexing (Straight)
+\draw [arrow] (loading) -- node[above] {Ball} (indexing);
+
+% 2. Indexing -> Wait (Straight Down)
+\draw [arrow] (indexing) -- node[right] {Arrived} (wait);
+
+% 3. Wait -> Loading (Wide path above everything)
+\draw [arrow] (wait.east) -- ++(1,0) |- ([yshift=1cm]loading.north) -- (loading.north);
+\node [right, font=\footnotesize] at ($(wait.east)+(1,1)$) {500ms};
+
+% 4. Indexing -> Full (Diagonal path)
+\draw [arrow] (indexing.south west) -- node[sloped, above] {Full} (full.north east);
+
+% 5. Loading -> Align (Straight)
+\draw [arrow] (loading) -- node[above] {Request} (align);
+
+% 6. Full -> Align (Wide path below and left)
+\draw [arrow] (full.south) -- ++(0,-0.5) -| ([xshift=-1cm]align.west) -- (align.west);
+\node [left, font=\footnotesize] at ($(full.south)+(-2.5,-0.5)$) {Request};
+
+% 7. Align -> Ready (Straight Down)
+\draw [arrow] (align) -- node[left] {Aligned} (ready);
+
+% 8. Ready -> Shooting (Straight Down)
+\draw [arrow] (ready) -- node[left] {Trigger} (shooting);
+
+% 9. Shooting -> Loading (Wide path below and right)
+\draw [arrow] (shooting.south) -- ++(0,-0.5) -| ([xshift=0.5cm]loading.south) -- (loading.south);
+\node [below right, font=\footnotesize] at (shooting.south) {1000ms};
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{State Descriptions}
+
+\begin{description}
+    \item[LOADING] Empty slot at intake position (0°), waiting for ball
+    \item[INDEXING] Moving indexer to next empty slot
+    \item[WAIT\_FOR\_INTAKE\_CLEAR] Pause after indexing (500ms)
+    \item[FULL] All 3 slots filled
+    \item[SHOOTING\_ALIGN] Rotating target slot to shooter position (240°)
+    \item[READY\_TO\_SHOOT] Aligned, waiting for manual trigger
+    \item[SHOOTING] Kicker sequence active (1000ms)
+\end{description}
 
 \newpage
 % ============================================================================
 \section{Color Sensor Detection Logic}
 % ============================================================================
 
-\subsection{Detection Thresholds (Updated)}
+\subsection{Detection Flow}
 
-Color detection logic was updated based on actual sensor data from testing:
+\begin{center}
+\begin{tikzpicture}[node distance=1.8cm, auto]
+
+% Main Vertical Spine
+\node (start) [startstop] {Read Sensor};
+\node (dist) [decision, below=of start] {Dist $>$ 3.5cm?};
+\node (bright) [decision, below=of dist] {RGB Sum $<$ 150?};
+\node (green) [decision, below=of bright] {G $>$ R+30 AND\\G $>$ B+30?};
+\node (purple) [decision, below=of green] {R $<$ G-20 AND\\R $<$ B-20?};
+\node (unknown) [action, below=of purple] {Return UNKNOWN};
+
+% Results (Right side) - positioned to avoid crossings
+\node (empty1) [action, right=3.5cm of dist] {Return EMPTY};
+\node (empty2) [action, right=3.5cm of bright] {Return EMPTY};
+\node (gret) [action, right=3.5cm of green] {Return GREEN};
+\node (pret) [action, right=3.5cm of purple] {Return PURPLE};
+
+% Arrows - Main spine
+\draw [arrow] (start) -- (dist);
+
+% Distance Check
+\draw [arrow] (dist) -- node[above] {Yes} (empty1);
+\draw [arrow] (dist) -- node[left] {No} (bright);
+
+% Brightness Check
+\draw [arrow] (bright) -- node[above] {Yes} (empty2);
+\draw [arrow] (bright) -- node[left] {No} (green);
+
+% Green Check
+\draw [arrow] (green) -- node[above] {Yes} (gret);
+\draw [arrow] (green) -- node[left] {No} (purple);
+
+% Purple Check
+\draw [arrow] (purple) -- node[above] {Yes} (pret);
+\draw [arrow] (purple) -- node[left] {No} (unknown);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Detection Thresholds}
 
 \begin{center}
 \begin{tabular}{|l|c|l|}
@@ -100,139 +426,32 @@ Condition & \texttt{G > R+30 AND G > B+30} & Green dominates both \\
 \multicolumn{3}{|c|}{\textbf{PURPLE Detection}} \\
 \hline
 Condition & \texttt{R < G-20 AND R < B-20} & Red is lowest \\
-Pattern & G highest, B close to G, R lowest & Based on real data \\
 \hline
 \end{tabular}
 \end{center}
 
-\textbf{Sample Data (Purple ball):}
-\begin{verbatim}
-Sample 1: R=58,  G=92,  B=79   (G-B=13)
-Sample 2: R=135, G=195, B=235  (G-B=40)
-Sample 3: R=146, G=215, B=261  (G-B=46)
-Sample 4: R=258, G=389, B=500  (G-B=111)
-Sample 5: R=141, G=195, B=243  (G-B=48)
-\end{verbatim}
-
-Key insight: G-B difference varies widely (13-111), so we don't constrain it.
-
 \newpage
 % ============================================================================
-\section{SmartIntakeAction State Machine}
-% ============================================================================
-
-\subsection{Overview}
-
-The \texttt{SmartIntakeAction} replaces the previous \texttt{ParallelAction} approach with intelligent movement control that \textbf{pauses for ball collection}.
-
-\subsection{State Diagram}
-
-\begin{center}
-\begin{tikzpicture}[node distance=2.5cm, scale=0.8, transform shape]
-
-% States
-\node (start) [startstop] {Action Start\\(at -11, -30)};
-\node (forward) [state, below=of start] {STATE\_MOVING\_FORWARD\\(0)};
-\node (paused) [state, below=of forward] {STATE\_PAUSED\_FOR\_INDEX\\(1)};
-\node (returning) [state, right=of paused] {STATE\_RETURNING\\(2)};
-\node (done) [startstop, below=of paused, fill=endcolor!30] {STATE\_DONE\\(3)};
-
-% Decisions
-\node (detect) [decision, right=of forward, xshift=1.5cm] {Ball\\Detected?};
-\node (target) [decision, left=of forward, xshift=-1.5cm] {Reached\\Y=-55?};
-\node (indexdone) [decision, below=of paused, yshift=-0.5cm] {Index\\Complete?};
-\node (backhome) [decision, right=of returning, xshift=1cm] {At\\Y=-30?};
-
-% Arrows
-\draw [arrow] (start) -- (forward);
-\draw [arrow] (forward) -- (detect);
-\draw [arrow] (detect) -- node[right] {Yes} (paused);
-\draw [arrow] (detect.north) to [bend left=30] node[above] {No} (forward.east);
-\draw [arrow] (forward) -- (target);
-\draw [arrow] (target) -- node[below] {Yes} (returning);
-\draw [arrow] (target.north) to [bend right=30] node[left] {No} (forward.west);
-\draw [arrow] (paused) -- (indexdone);
-\draw [arrow] (indexdone) to [bend right=45] node[left] {Yes, balls<3} (forward.south);
-\draw [arrow] (indexdone) -- node[right] {Yes, balls=3} (returning);
-\draw [arrow] (returning) -- (backhome);
-\draw [arrow] (backhome) -- node[below] {Yes} (done);
-\draw [arrow] (backhome.north) to [bend left=30] node[right] {No} (returning.east);
-
-\end{tikzpicture}
-\end{center}
-
-\newpage
-\subsection{State Descriptions}
-
-\begin{enumerate}[label=\textbf{STATE \arabic*:}]
-    \item \textbf{MOVING\_FORWARD (0)}
-    \begin{itemize}
-        \item Robot moves slowly forward (Y decreasing)
-        \item \texttt{moveSpeed = 0.15} (tunable)
-        \item Continuously reads color sensor
-        \item Edge detection: EMPTY $\rightarrow$ GREEN/PURPLE triggers
-        \item Transitions:
-        \begin{itemize}
-            \item Ball detected $\rightarrow$ PAUSED\_FOR\_INDEX
-            \item Reached Y = -55 $\rightarrow$ RETURNING
-            \item 3 balls collected $\rightarrow$ RETURNING
-        \end{itemize}
-    \end{itemize}
-    
-    \item \textbf{PAUSED\_FOR\_INDEX (1)}
-    \begin{itemize}
-        \item Robot \textbf{STOPS MOVEMENT COMPLETELY}
-        \item \texttt{drive.setDrivePowers(Vector2d(0, 0))}
-        \item Calls \texttt{revolver.indexerNextSlot()}
-        \item Waits for indexing (max 1200ms)
-        \item Intake keeps running
-        \item Transitions:
-        \begin{itemize}
-            \item Index complete + balls < 3 $\rightarrow$ MOVING\_FORWARD
-            \item Index complete + balls = 3 $\rightarrow$ RETURNING
-        \end{itemize}
-    \end{itemize}
-    
-    \item \textbf{RETURNING (2)}
-    \begin{itemize}
-        \item Robot moves back to start (Y = -30)
-        \item Faster speed (0.3)
-        \item Intake motor OFF
-        \item Transitions:
-        \begin{itemize}
-            \item Within 2" of Y=-30 $\rightarrow$ DONE
-        \end{itemize}
-    \end{itemize}
-    
-    \item \textbf{DONE (3)}
-    \begin{itemize}
-        \item Stops all movement
-        \item Returns \texttt{false} to end action
-    \end{itemize}
-\end{enumerate}
-
-\newpage
-% ============================================================================
-\section{Complete Autonomous Flow (Updated)}
+\section{Complete Autonomous Flow}
 % ============================================================================
 
 \begin{center}
-\begin{tikzpicture}[node distance=1cm, scale=0.7, transform shape]
+\begin{tikzpicture}[node distance=1.2cm, scale=0.85, transform shape]
 
-% Nodes
+% Nodes - vertical flow
 \node (start) [startstop] {waitForStart()};
 \node (step1) [process, below=of start] {STEP 1: Move to AprilTag};
 \node (detect) [action, below=of step1] {DetectPatternAction};
 \node (step2) [process, below=of detect] {STEP 2: Move to Shooting};
-\node (step3) [process, below=of step2] {STEP 3: Shoot 3 Preloaded};
+\node (step3) [action, below=of step2] {STEP 3: Shoot 3 Preloaded};
 \node (step4) [process, below=of step3] {STEP 4: Move to Intake};
 \node (step5) [action, below=of step4] {STEP 5: SmartIntakeAction};
 \node (step6) [process, below=of step5] {STEP 6: Return to Shooting};
-\node (step7) [process, below=of step6] {STEP 7: Shoot Collected};
+\node (step7) [action, below=of step6] {STEP 7: Shoot Collected};
 \node (step8) [process, below=of step7] {STEP 8: Park};
 \node (end) [startstop, below=of step8, fill=endcolor!30] {Complete};
 
-% Arrows
+% Simple straight arrows
 \draw [arrow] (start) -- (step1);
 \draw [arrow] (step1) -- (detect);
 \draw [arrow] (detect) -- (step2);
@@ -244,14 +463,14 @@ The \texttt{SmartIntakeAction} replaces the previous \texttt{ParallelAction} app
 \draw [arrow] (step7) -- (step8);
 \draw [arrow] (step8) -- (end);
 
-% Annotations
-\node[right=of step5, xshift=1cm, text width=4cm, align=left] {
+% Annotations on right side
+\node[right=1.5cm of step5, text width=4cm, align=left] {
     \small
     \textbf{Smart Intake:}\\
     - Scans forward\\
     - Pauses for balls\\
-    - Indexes\\
-    - Returns
+    - Auto-indexes\\
+    - Returns when done
 };
 
 \end{tikzpicture}
@@ -259,141 +478,8 @@ The \texttt{SmartIntakeAction} replaces the previous \texttt{ParallelAction} app
 
 \newpage
 % ============================================================================
-\section{IntakeDebugOpMode}
+\section{System Parameters Reference (Updated)}
 % ============================================================================
-
-A standalone opmode for testing intake mechanisms in isolation.
-
-\subsection{Purpose}
-Test automatic intake + color sensor + indexer without drivetrain movement.
-
-\subsection{Operation Flow}
-
-\begin{center}
-\begin{tikzpicture}[node distance=1.5cm, scale=0.8, transform shape]
-
-\node (start) [startstop] {Press START};
-\node (intake) [process, below=of start] {Run Intake (full power)};
-\node (scan) [decision, below=of intake] {Ball\\Detected?};
-\node (index) [action, right=of scan, xshift=1.5cm] {Index to Next Slot};
-\node (wait) [process, below=of index] {Wait 1200ms};
-\node (check) [decision, below=of scan] {Collected\\3 balls?};
-\node (done) [startstop, below=of check, fill=endcolor!30] {Stop (5 min timeout)};
-
-\draw [arrow] (start) -- (intake);
-\draw [arrow] (intake) -- (scan);
-\draw [arrow] (scan) -- node[above] {Yes} (index);
-\draw [arrow] (scan) -- node[left] {No} (check);
-\draw [arrow] (index) -- (wait);
-\draw [arrow] (wait.south) to [bend right=45] (scan.east);
-\draw [arrow] (check) -- node[left] {Yes} (done);
-\draw [arrow] (check.west) to [bend left=30] node[left] {No} (intake.west);
-
-\end{tikzpicture}
-\end{center}
-
-\subsection{Telemetry Output}
-\begin{itemize}
-    \item \texttt{Color}: Current detection (GREEN/PURPLE/EMPTY/UNKNOWN)
-    \item \texttt{RGB}: Raw sensor values (R:X G:Y B:Z)
-    \item \texttt{Distance}: Distance in cm
-    \item \texttt{Balls Collected}: Count / Target
-    \item \texttt{Status}: Current action
-\end{itemize}
-
-\newpage
-% ============================================================================
-\section{RevolverSubsystem Color Detection}
-% ============================================================================
-
-\subsection{State Machine}
-
-\begin{center}
-\begin{tikzpicture}[node distance=2cm, scale=0.75, transform shape]
-
-\node (read) [process] {Read Sensor};
-\node (dist) [decision, below=of read] {Distance\\< 3.5cm?};
-\node (bright) [decision, below=of dist] {RGB Sum\\> 150?};
-\node (green) [decision, below=of bright] {G > R+30\\AND\\G > B+30?};
-\node (purple) [decision, below=of green] {R < G-20\\AND\\R < B-20?};
-\node (det_green) [action, right=of green, xshift=1.5cm] {Return GREEN};
-\node (det_purple) [action, right=of purple, xshift=1.5cm] {Return PURPLE};
-\node (det_unknown) [action, below=of purple] {Return UNKNOWN};
-\node (det_empty) [action, right=of dist, xshift=1.5cm] {Return EMPTY};
-
-\draw [arrow] (read) -- (dist);
-\draw [arrow] (dist) -- node[left] {Yes} (bright);
-\draw [arrow] (dist) -- node[above] {No} (det_empty);
-\draw [arrow] (bright) -- node[left] {Yes} (green);
-\draw [arrow] (bright.east) to [bend left=15] node[above] {No} (det_empty.south);
-\draw [arrow] (green) -- node[above] {Yes} (det_green);
-\draw [arrow] (green) -- node[left] {No} (purple);
-\draw [arrow] (purple) -- node[above] {Yes} (det_purple);
-\draw [arrow] (purple) -- node[left] {No} (det_unknown);
-
-\end{tikzpicture}
-\end{center}
-
-\subsection{Methods}
-
-\begin{itemize}
-    \item \texttt{getCurrentColor()} - Returns \textbf{cached} value (updated only when \texttt{update()} called)
-    \item \texttt{readColorNow()} - Returns \textbf{live} sensor reading (use in autonomous)
-\end{itemize}
-
-\newpage
-% ============================================================================
-\section{Debugging Timeline}
-% ============================================================================
-
-\subsection{Issues Encountered and Fixes}
-
-\begin{tcolorbox}[colback=fixedcolor!10, colframe=fixedcolor, title={Issue 1: Intake Timeout}]
-\textbf{Problem:} \texttt{ContinuousIntakeAction} hung forever when no balls detected.\\
-\textbf{Cause:} Action always returned \texttt{true}, never exited.\\
-\textbf{Fix:} Added 10-second (now 15-second) timeout.
-\end{tcolorbox}
-
-\begin{tcolorbox}[colback=fixedcolor!10, colframe=fixedcolor, title={Issue 2: Color Sensor Not Working}]
-\textbf{Problem:} No telemetry, balls not detected.\\
-\textbf{Cause:} \texttt{getCurrentColor()} returned cached data, but \texttt{update()} never called in autonomous.\\
-\textbf{Fix:} Created \texttt{readColorNow()} method for live reading.
-\end{tcolorbox}
-
-\begin{tcolorbox}[colback=fixedcolor!10, colframe=fixedcolor, title={Issue 3: False GREEN Detection}]
-\textbf{Problem:} Sensor detected GREEN from scattered light.\\
-\textbf{Cause:} Distance threshold too high (5cm), no brightness minimum.\\
-\textbf{Fix:} 
-\begin{itemize}
-    \item Reduced distance to 3.5cm
-    \item Added minimum brightness check (RGB sum > 150)
-\end{itemize}
-\end{tcolorbox}
-
-\begin{tcolorbox}[colback=fixedcolor!10, colframe=fixedcolor, title={Issue 4: Purple Not Detected}]
-\textbf{Problem:} Most purple ball readings showed UNKNOWN.\\
-\textbf{Cause:} Logic required \texttt{|G - B| < 45}, but real data showed 13-111 range.\\
-\textbf{Fix:} Simplified to \texttt{R < G-20 AND R < B-20} (R is always lowest).
-\end{tcolorbox}
-
-\begin{tcolorbox}[colback=fixedcolor!10, colframe=fixedcolor, title={Issue 5: No Synchronization}]
-\textbf{Problem:} Robot completed trajectory without checking if balls collected.\\
-\textbf{Cause:} \texttt{ParallelAction} ran independently.\\
-\textbf{Fix:} Created \texttt{SmartIntakeAction} with pause-for-collection.
-\end{tcolorbox}
-
-\begin{tcolorbox}[colback=fixedcolor!10, colframe=fixedcolor, title={Issue 6: Wrong Navigation}]
-\textbf{Problem:} Robot went toward goal instead of intake position.\\
-\textbf{Cause:} \texttt{MOVING\_TO\_START} state used simple proportional control.\\
-\textbf{Fix:} Use Roadrunner trajectory (\texttt{moveToIntakeStart}), removed \texttt{MOVING\_TO\_START} state.
-\end{tcolorbox}
-
-\newpage
-% ============================================================================
-\section{System Parameters Reference}
-% ============================================================================
-
-\subsection{Autonomous Constants}
 
 \begin{center}
 \begin{tabular}{|l|c|l|}
@@ -403,30 +489,22 @@ Test automatic intake + color sensor + indexer without drivetrain movement.
 \multicolumn{3}{|c|}{\textbf{Timing (ms)}} \\
 \hline
 SHOOTER\_SPINUP\_MS & 1000 & Shooter warm-up time \\
-KICKER\_EXTEND\_MS & 600 & Kicker ejection duration \\
-KICKER\_RETRACT\_MS & 400 & Kicker retraction duration \\
-INDEXER\_SETTLE\_MS & 500 & Indexer stabilization time \\
-INTAKE\_PAUSE\_MS & 1200 & Wait for indexer slot creation \\
+Kick Spool Time & 500 & Wait before ejecting \\
+Kick Eject Duration & 600 & Kicker extended time \\
+Kick Retract Duration & 600 & Safety retraction time \\
+INDEXER\_SETTLE\_MS & 500 & Indexer stabilization \\
+INDEX\_COOLDOWN\_MS & 800 & Auto-index debounce (A3) \\
+\hline
+\multicolumn{3}{|c|}{\textbf{Servo Positions}} \\
+\hline
+KICKER\_RETRACT & 0.3 & Retracted position \\
+KICKER\_EJECT & 0.8 & Ejection position \\
 \hline
 \multicolumn{3}{|c|}{\textbf{Power Levels}} \\
 \hline
-SHOOTER\_POWER & 0.4 & Shooter motor power \\
-INTAKE\_POWER & 1.0 & Intake motor power \\
-\hline
-\multicolumn{3}{|c|}{\textbf{Smart Intake}} \\
-\hline
-moveSpeed & 0.15 & Forward speed during scan \\
-returnSpeed & 0.3 & Speed when returning \\
-startY & -30 & Intake start position \\
-endY & -55 & End of intake path \\
-MAX\_ACTION\_TIME\_MS & 15000 & Timeout (15 seconds) \\
-\hline
-\multicolumn{3}{|c|}{\textbf{Color Detection}} \\
-\hline
-COLOR\_DETECT\_DISTANCE\_CM & 3.5 & Max detection distance \\
-Min Brightness & 150 & RGB sum threshold \\
-Green dominance & +30 & G must exceed R,B by 30 \\
-Purple (R is lowest) & -20 & R must be 20 below G,B \\
+SHOOTER\_POWER (Auto) & 0.4 & Uses setShooterPowerDirect \\
+SHOOTER\_POWER (Manual) & 0.67 & Uses setShooterPower \\
+INTAKE\_POWER & 1.0 & Full intake power \\
 \hline
 \end{tabular}
 \end{center}
@@ -436,56 +514,43 @@ Purple (R is lowest) & -20 & R must be 20 below G,B \\
 \section{Recommended Next Steps}
 % ============================================================================
 
-\subsection{To Fix: Robot Not Moving Forward}
+\subsection{Priority 1: Shooter Power Investigation}
 
 \begin{enumerate}
-    \item \textbf{Check Battery Voltage}
+    \item \textbf{Add Velocity Telemetry}
     \begin{itemize}
-        \item Low battery $\rightarrow$ motors can't overcome friction
-        \item Add telemetry: \texttt{voltageSensor.getVoltage()}
+        \item Log \texttt{shooter.getVelocity()} during operation
+        \item Compare commanded vs actual velocity
     \end{itemize}
     
-    \item \textbf{Increase moveSpeed}
+    \item \textbf{Test Both Methods}
     \begin{itemize}
-        \item Current: 0.15
-        \item Try: 0.3 or 0.4
-        \item Edit in FTC Dashboard (it's in \texttt{SmartIntakeAction})
+        \item \texttt{setShooterPowerDirect(0.4)} - raw PWM
+        \item \texttt{setShooterPower(0.4)} - velocity + power
+        \item Measure actual ball exit speed/distance
     \end{itemize}
     
-    \item \textbf{Verify setDrivePowers}
+    \item \textbf{Consider Motor Mode}
     \begin{itemize}
-        \item Add telemetry in \texttt{STATE\_MOVING\_FORWARD}
-        \item Log: currentY, moveSpeed, ballsCollected
-        \item Check if \texttt{drive.setDrivePowers()} is actually being called
-    \end{itemize}
-    
-    \item \textbf{Test Manual Control}
-    \begin{itemize}
-        \item Create simple test: \texttt{drive.setDrivePowers(new PoseVelocity2d(new Vector2d(0, -0.3), 0))}
-        \item If this doesn't work, issue is with \texttt{setDrivePowers()} itself
+        \item Check if motor is in \texttt{RUN\_USING\_ENCODER} mode
+        \item Try \texttt{RUN\_WITHOUT\_ENCODER} for pure power control
     \end{itemize}
 \end{enumerate}
 
-\subsection{To Improve: Indexer Reliability}
+\subsection{Priority 2: AprilTag Verification}
 
 \begin{enumerate}
-    \item Monitor \texttt{isIndexerAtTarget()} return value
-    \item Log indexer position during indexing
-    \item If it never returns true:
-    \begin{itemize}
-        \item Check encoder connection
-        \item Verify \texttt{targetPosition} is set correctly
-        \item May need to use timeout only
-    \end{itemize}
+    \item Verify camera shows \texttt{STREAMING} during init
+    \item Confirm detection count > 0 with tags visible
+    \item Test detection during autonomous movement
 \end{enumerate}
 
-\subsection{Future Enhancements}
+\subsection{Priority 3: A3 Field Testing}
 
-\begin{itemize}
-    \item \textbf{Dynamic Speed Adjustment}: Slow down further when ball detected
-    \item \textbf{Multi-pass Collection}: If < 3 balls, make second pass
-    \item \textbf{Vision-based Navigation}: Use camera to locate balls
-    \item \textbf{Adaptive Thresholds}: Auto-calibrate color sensor based on ambient
-\end{itemize}
+\begin{enumerate}
+    \item Verify auto-indexing triggers correctly during intake
+    \item Confirm kicker works smoothly without lag
+    \item Test manual override controls (Cross, D-pad)
+\end{enumerate}
 
 \end{document}
