@@ -15,8 +15,8 @@ import java.util.List;
 
 public class AprilTagNavigator {
 
-    private VisionPortal visionPortal;
-    private AprilTagProcessor aprilTag;
+    public VisionPortal visionPortal; // Made public for camera status access
+    public AprilTagProcessor aprilTag; // Made public for telemetry access
     private AprilTagDetection desiredTag = null;
     private int lastDetectedTagId = -1;
 

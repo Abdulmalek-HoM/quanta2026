@@ -15,6 +15,7 @@ import com.acmerobotics.dashboard.telemetry.TelemetryPacket;
 
 import org.firstinspires.ftc.teamcode.MecanumDrive;
 import org.firstinspires.ftc.teamcode.subsystems.RevolverSubsystem;
+import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 
 /**
  * DecodeShootingAuto v4.0 - FULLY DIRECT CONTROL
@@ -47,7 +48,8 @@ public class DecodeShootingAuto extends LinearOpMode {
     public static long INTAKE_PAUSE_MS = 1200; // INCREASED: Wait for indexer to create empty slot
 
     // === POWER SETTINGS ===
-    public static double SHOOTER_POWER = 0.4; // Lowered (was 0.67, still too strong)
+    public static double SHOOTER_POWER = 0.4; // Using setShooterPowerDirect (raw PWM) to avoid velocity PID max-speed
+                                              // issue
     public static double INTAKE_POWER = 1.0;
 
     // === SUBSYSTEMS ===
@@ -96,7 +98,16 @@ public class DecodeShootingAuto extends LinearOpMode {
         // Init telemetry
         telemetry.addData("Mode", "v4.0 DIRECT CONTROL");
         telemetry.addData("Status", "Ready");
+        telemetry.addData("Camera", "Waiting for stream...");
         telemetry.update();
+
+        // CRITICAL: Wait for camera to start streaming
+        while (!isStarted() && !isStopRequested()) {
+            telemetry.addData("Camera Status", tagNavigator.visionPortal.getCameraState());
+            telemetry.addData("Detections", tagNavigator.aprilTag.getDetections().size());
+            telemetry.update();
+            sleep(20);
+        }
 
         waitForStart();
         if (isStopRequested())
@@ -113,8 +124,17 @@ public class DecodeShootingAuto extends LinearOpMode {
         telemetry.addLine("=== APRILTAG RESULT ===");
         telemetry.addData("Pattern", detectedPattern.toString());
         telemetry.addData("Tag ID", tagNavigator.getLastDetectedTagId());
+        telemetry.addData("Camera State", tagNavigator.visionPortal.getCameraState());
+        telemetry.addData("Total Detections", tagNavigator.aprilTag.getDetections().size());
+
+        // Show all detected tags for debugging
+        for (int i = 0; i < tagNavigator.aprilTag.getDetections().size(); i++) {
+            AprilTagDetection det = tagNavigator.aprilTag.getDetections().get(i);
+            telemetry.addData("  Detected Tag " + i, "ID=" + det.id);
+        }
+
         telemetry.update();
-        sleep(1000);
+        sleep(2000); // Longer pause to review results
 
         // ========================================
         // STEP 2-3: Move to shooting position
@@ -249,7 +269,10 @@ public class DecodeShootingAuto extends LinearOpMode {
                 startTime = System.currentTimeMillis();
 
             TagConfiguration.RandomizationPattern pattern = tagNavigator.detectRandomizationPattern();
+            int detectionCount = tagNavigator.aprilTag.getDetections().size();
+
             packet.put("Tag ID", tagNavigator.getLastDetectedTagId());
+            packet.put("Detections", detectionCount);
 
             if (pattern != TagConfiguration.RandomizationPattern.UNKNOWN) {
                 detectedPattern = pattern;
@@ -258,11 +281,11 @@ public class DecodeShootingAuto extends LinearOpMode {
             }
 
             if (System.currentTimeMillis() - startTime > TIMEOUT_MS) {
-                packet.put("Pattern", "TIMEOUT");
+                packet.put("Pattern", "TIMEOUT - " + detectionCount + " seen");
                 return false;
             }
 
-            packet.put("Pattern", "Scanning...");
+            packet.put("Pattern", "Scanning... (" + detectionCount + " tags)");
             return true;
         }
     }

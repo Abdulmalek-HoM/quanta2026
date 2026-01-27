@@ -7,13 +7,13 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
-import org.firstinspires.ftc.teamcode.subsystems.SimpleRevolver;
+import org.firstinspires.ftc.teamcode.subsystems.RevolverSubsystem;
 
-@TeleOp(name = "A1", group = "Test")
-public class A1 extends OpMode {
+@TeleOp(name = "A3 - Smart Indexing", group = "Competition")
+public class A3 extends OpMode {
 
     // Subsystems
-    private SimpleRevolver revolver;
+    private RevolverSubsystem revolver;
 
     // Drivetrain Motors
     private DcMotor leftFront;
@@ -32,13 +32,27 @@ public class A1 extends OpMode {
     private boolean lastUp = false;
     private boolean lastDown = false;
 
+    // Direct kicker control (bypasses RevolverSubsystem FSM)
+    private boolean isKicking = false;
+    private long kickTimer = 0;
+    private static final double KICKER_RETRACT = 0.3;
+    private static final double KICKER_EJECT = 0.8;
+
+    // Auto-indexing state
+    private RevolverSubsystem.SlotColor lastDetectedColor = RevolverSubsystem.SlotColor.EMPTY;
+    private long lastIndexTime = 0;
+    private static final long INDEX_COOLDOWN_MS = 800; // Prevent double-indexing
+
     // Drivetrain Multiplier
     private double multiplier = 0.65;
 
     @Override
     public void init() {
-        // 1. Initialize Revolver
-        revolver = new SimpleRevolver(hardwareMap);
+        // 1. Initialize Revolver (RevolverSubsystem for smart indexing)
+        revolver = new RevolverSubsystem(hardwareMap);
+
+        // CRITICAL: Disable FSM kicker control so A3 can control it directly
+        revolver.disableFSMKickerControl = true;
 
         // 2. Initialize Drivetrain Motors
         leftFront = hardwareMap.get(DcMotor.class, "leftFront");
@@ -46,9 +60,7 @@ public class A1 extends OpMode {
         rightFront = hardwareMap.get(DcMotor.class, "rightFront");
         rightBack = hardwareMap.get(DcMotor.class, "rightBack");
 
-        // Directions (Copied from Amly_Manual_Detection)
-        // leftFront: FORWARD, leftBack: FORWARD
-        // rightFront: REVERSE, rightBack: REVERSE
+        // Directions
         leftFront.setDirection(DcMotor.Direction.FORWARD);
         leftBack.setDirection(DcMotor.Direction.FORWARD);
         rightFront.setDirection(DcMotor.Direction.REVERSE);
@@ -67,7 +79,8 @@ public class A1 extends OpMode {
                 RevHubOrientationOnRobot.UsbFacingDirection.FORWARD));
         imu.initialize(parameters);
 
-        telemetry.addData("Status", "A1 Mode Ready");
+        telemetry.addData("Status", "A3 Smart Indexing Ready");
+        telemetry.addData("Info", "RT=Intake (auto-index), LB=Kick, X=Manual index");
     }
 
     @Override
@@ -76,24 +89,16 @@ public class A1 extends OpMode {
         // DRIVETRAIN LOGIC (Field Centric)
         // =========================================================================
 
-        // Reset Yaw (Field Centric)
+        // Reset Yaw
         if (gamepad1.options) {
             imu.resetYaw();
         }
 
-        // Speed Multiplier (Left Bumper usually Slow Mode in Manual, but here LB is
-        // Kick)
-        // Manual Detection uses LB for slow mode.
-        // SimpleTeleOp uses LB for KICK.
-        // Let's use Right Bumper for Slow Mode? Or just keep it fixed?
-        // User didn't specify Drivetrain controls explicitly other than "gamesticks".
-        // I will use default multiplier 0.8 usually, or 0.5 as per Manual Detection.
-        // Let's map Slow Mode to Right Bumper (since LB is Kick).
+        // Speed Multiplier (Right Bumper = Slow Mode)
         if (gamepad1.right_bumper) {
             multiplier = 0.3;
         } else {
-            multiplier = 0.7; // Increased slightly from 0.5 for better response, or stick to 0.5? code had
-                              // 0.5 default.
+            multiplier = 0.7;
         }
 
         double x = gamepad1.left_stick_x;
@@ -101,23 +106,14 @@ public class A1 extends OpMode {
         double rx = gamepad1.right_stick_x;
 
         YawPitchRollAngles botAngles = imu.getRobotYawPitchRollAngles();
-        double botHeading = -botAngles.getYaw(AngleUnit.RADIANS); // Note: Manual uses DEGREES and converts manualy.
-                                                                  // Helper uses Radians typically.
-        // wait, detection code: theta = -yaw(DEGREES); rotX = x * cos(theta/180*PI)...
-        // which is just radians.
+        double botHeading = -botAngles.getYaw(AngleUnit.RADIANS);
 
-        // Let's use standard field centric math
+        // Field centric transformation
         double rotX = x * Math.cos(botHeading) - y * Math.sin(botHeading);
         double rotY = x * Math.sin(botHeading) + y * Math.cos(botHeading);
 
         // Denominator to ensure no motor power > 1
         double denominator = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1);
-
-        // Amly Manual Detection Distribution:
-        // LF = (rotY + rotX + rx)
-        // RF = (rotY - rotX - rx)
-        // LB = (rotY - rotX + rx)
-        // RB = (rotY + rotX - rx)
 
         leftFront.setPower(((rotY + rotX + rx) / denominator) * multiplier);
         rightFront.setPower(((rotY - rotX - rx) / denominator) * multiplier);
@@ -125,21 +121,47 @@ public class A1 extends OpMode {
         rightBack.setPower(((rotY + rotX - rx) / denominator) * multiplier);
 
         // =========================================================================
-        // REVOLVER LOGIC (From SimpleTeleOp)
+        // REVOLVER LOGIC WITH SMART AUTO-INDEXING
         // =========================================================================
 
-        // 1. Intake Control (Triggers)
+        // 1. Intake Control + Auto-Indexing
+        boolean intaking = false;
         if (gamepad1.right_trigger > 0.1) {
-            revolver.setIntakePower(1.0);
+            revolver.setIntakePowerDirect(1.0);
+            intaking = true;
         } else if (gamepad1.left_trigger > 0.1) {
-            revolver.setIntakePower(-1.0);
+            revolver.setIntakePowerDirect(-1.0);
         } else {
-            revolver.setIntakePower(0);
+            revolver.setIntakePowerDirect(0);
         }
 
-        // 2. Index / Load (Press Cross)
+        // AUTO-INDEXING: Detect ball during intake and rotate automatically
+        if (intaking) {
+            RevolverSubsystem.SlotColor currentColor = revolver.readColorNow();
+            boolean ballDetected = (currentColor == RevolverSubsystem.SlotColor.GREEN ||
+                    currentColor == RevolverSubsystem.SlotColor.PURPLE);
+
+            // Edge detection: ball just entered (wasn't there before)
+            boolean justDetected = ballDetected &&
+                    (lastDetectedColor == RevolverSubsystem.SlotColor.EMPTY);
+
+            // Auto-index with cooldown to prevent double-triggering
+            long currentTime = System.currentTimeMillis();
+            if (justDetected && (currentTime - lastIndexTime > INDEX_COOLDOWN_MS)) {
+                revolver.indexerNextSlot();
+                lastIndexTime = currentTime;
+                telemetry.addLine(">>> AUTO-INDEXED! <<<");
+            }
+
+            lastDetectedColor = currentColor;
+        } else {
+            // Reset detection state when not intaking
+            lastDetectedColor = RevolverSubsystem.SlotColor.EMPTY;
+        }
+
+        // 2. Manual Index (Press Cross) - Always available as override
         if (gamepad1.cross && !lastCross) {
-            revolver.moveNextSlot();
+            revolver.indexerNextSlot();
         }
         lastCross = gamepad1.cross;
 
@@ -147,18 +169,36 @@ public class A1 extends OpMode {
         if (gamepad1.circle && !lastCircle) {
             isShooterOn = !isShooterOn;
             if (isShooterOn) {
-                revolver.setShooterPower(0.67);
+                revolver.setShooterPowerDirect(0.67);
             } else {
-                revolver.setShooterPower(0);
+                revolver.setShooterPowerDirect(0);
             }
         }
         lastCircle = gamepad1.circle;
 
-        // 4. Kick (Press Left Bumper)
+        // 4. Kick (Press Left Bumper) - Direct control
         if (gamepad1.left_bumper && !lastLeftBumper) {
-            revolver.kick();
+            isKicking = true;
+            kickTimer = System.currentTimeMillis();
         }
         lastLeftBumper = gamepad1.left_bumper;
+
+        // Direct kicker logic (like SimpleRevolver)
+        if (isKicking) {
+            long elapsed = System.currentTimeMillis() - kickTimer;
+            if (elapsed < 500) {
+                // Spool up
+                revolver.kicker.setPosition(KICKER_RETRACT);
+            } else if (elapsed < 1100) {
+                // Eject
+                revolver.kicker.setPosition(KICKER_EJECT);
+            } else if (elapsed < 1700) {
+                // Retract
+                revolver.kicker.setPosition(KICKER_RETRACT);
+            } else {
+                isKicking = false;
+            }
+        }
 
         // 5. Manual Trim (D-Pad Up/Down)
         if (gamepad1.dpad_up && !lastUp) {
@@ -170,14 +210,20 @@ public class A1 extends OpMode {
         lastUp = gamepad1.dpad_up;
         lastDown = gamepad1.dpad_down;
 
+        // Update subsystem
         revolver.update();
 
-        // Telemetry
-        telemetry.addData("Mode", "A1 - Drive + Revolver");
-        telemetry.addData("Shooter", isShooterOn ? "ON (0.8)" : "OFF");
-        telemetry.addData("Heading", String.format("%.1f deg", Math.toDegrees(botHeading)));
-        telemetry.addData("Revolver Tgt", revolver.getTargetPos());
-        telemetry.addData("Controls", "RT/LT:Intake, LB:Kick, RB:Slow, O:Shoot, X:Next");
+        // =========================================================================
+        // TELEMETRY
+        // =========================================================================
+        telemetry.addData("Mode", "A3 - Smart Auto-Index");
+        telemetry.addData("Shooter", isShooterOn ? "ON (0.67)" : "OFF");
+        telemetry.addData("Detected", lastDetectedColor.toString());
+        telemetry.addData("Indexer Pos", revolver.getIndexerPosition());
+        telemetry.addData("Heading", String.format("%.1f°", Math.toDegrees(botHeading)));
+        telemetry.addLine();
+        telemetry.addData("Controls", "RT:Auto-Intake | X:Manual Index | LB:Kick");
+        telemetry.addData("Other", "O:Shooter | D-pad:±5 ticks | RB:Slow");
         telemetry.update();
     }
 }

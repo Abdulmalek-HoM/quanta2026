@@ -15,7 +15,7 @@ public class RevolverSubsystem {
     private DcMotorEx indexer;
     private DcMotorEx intake;
     private DcMotorEx shooter;
-    private Servo kicker;
+    public Servo kicker; // Made public for direct TeleOp control in A3
     private RevColorSensorV3 sensor;
 
     // Constants
@@ -24,8 +24,11 @@ public class RevolverSubsystem {
     private static final int TICKS_PER_REVOLUTION = 288; // 360 degrees
     private static final double INDEXER_POWER = 0.3;
     private static final double INTAKE_POWER = 1.0;
-    private static final double KICKER_EJECT_POS = 1.0;
-    private static final double KICKER_RETRACT_POS = 0.0;
+
+    // Kicker servo positions (FIXED to match SimpleRevolver values that work in A1)
+    private static final double KICKER_RETRACT_POS = 0.3; // Was 0.5, now matches A1
+    private static final double KICKER_EJECT_POS = 0.8; // Was 1.0, now matches A1
+
     private static final double COLOR_DETECT_DISTANCE_CM = 3.5; // Reduced to avoid false positives
 
     // State Machine
@@ -68,6 +71,13 @@ public class RevolverSubsystem {
     // Alignment Safety
     private boolean aligningStarted = false; // Prevents infinite recalculation
 
+    // TeleOp kicking state (timer-based like SimpleRevolver)
+    private boolean isKicking = false;
+    private long kickTimer = 0;
+
+    // Flag to disable FSM kicker control (for TeleOp direct control)
+    public boolean disableFSMKickerControl = false;
+
     public RevolverSubsystem(HardwareMap hardwareMap) {
         indexer = hardwareMap.get(DcMotorEx.class, "indexer");
         intake = hardwareMap.get(DcMotorEx.class, "intake");
@@ -99,7 +109,10 @@ public class RevolverSubsystem {
         // 2. State Machine
         switch (currentState) {
             case LOADING:
-                kicker.setPosition(KICKER_RETRACT_POS);
+                // Don't control kicker if TeleOp is directly controlling it
+                if (!disableFSMKickerControl) {
+                    kicker.setPosition(KICKER_RETRACT_POS);
+                }
                 aligningStarted = false;
 
                 // Reset shoot requests to prevent "Runaway" rotation where it immediately goes
@@ -208,7 +221,7 @@ public class RevolverSubsystem {
 
             case READY_TO_SHOOT:
                 intake.setPower(0);
-                setShooterPower(1.0); // Keep spinning
+                setShooterPower(0.67); // Keep spinning
 
                 if (manualTrigger) {
                     currentState = RevolverState.SHOOTING;
@@ -263,6 +276,22 @@ public class RevolverSubsystem {
                 manualTrigger = false; // Prevent phantom kicks from stale commands
                 currentState = RevolverState.SHOOTING_ALIGN;
                 return;
+            }
+        }
+
+        // CRITICAL: TeleOp Kicker Logic must run LAST to override FSM
+        // This ensures timer-based kicking works in TeleOp mode (A3)
+        if (isKicking) {
+            long elapsed = System.currentTimeMillis() - kickTimer;
+            if (elapsed < 500) {
+                // Spool up time (Wait for Shooter)
+                kicker.setPosition(KICKER_RETRACT_POS);
+            } else if (elapsed < 1100) { // 500 + 600 (Eject Duration)
+                kicker.setPosition(KICKER_EJECT_POS);
+            } else if (elapsed < 1700) { // 1100 + 600 (Retract Safety)
+                kicker.setPosition(KICKER_RETRACT_POS);
+            } else {
+                isKicking = false;
             }
         }
     }
@@ -509,5 +538,29 @@ public class RevolverSubsystem {
         shootPurpleRequest = false;
         manualTrigger = false;
         aligningStarted = false;
+    }
+
+    // =========================================================================
+    // TeleOp Helper Methods (SimpleRevolver API compatibility)
+    // =========================================================================
+
+    /**
+     * Simple kick method for TeleOp use.
+     * Starts timer-based kick sequence.
+     */
+    public void kick() {
+        isKicking = true;
+        kickTimer = System.currentTimeMillis();
+    }
+
+    /**
+     * Manual trim adjustment for TeleOp.
+     * Adjusts the indexer target position by deltaTicks.
+     * 
+     * @param deltaTicks Number of ticks to adjust (+/-)
+     */
+    public void manualAdjust(int deltaTicks) {
+        int currentTarget = indexer.getTargetPosition();
+        indexer.setTargetPosition(currentTarget + deltaTicks);
     }
 }
