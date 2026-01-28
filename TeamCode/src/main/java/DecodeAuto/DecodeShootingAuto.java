@@ -9,6 +9,7 @@ import com.acmerobotics.roadrunner.Vector2d;
 import com.acmerobotics.roadrunner.ftc.Actions;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
 
 import androidx.annotation.NonNull;
 import com.acmerobotics.dashboard.telemetry.TelemetryPacket;
@@ -48,7 +49,7 @@ public class DecodeShootingAuto extends LinearOpMode {
     public static long INTAKE_PAUSE_MS = 1200; // INCREASED: Wait for indexer to create empty slot
 
     // === POWER SETTINGS ===
-    public static double SHOOTER_POWER = 0.4; // Using setShooterPowerDirect (raw PWM) to avoid velocity PID max-speed
+    public static double SHOOTER_POWER = 0.5; // Using setShooterPowerDirect (raw PWM) to avoid velocity PID max-speed
                                               // issue
     public static double INTAKE_POWER = 1.0;
 
@@ -71,6 +72,12 @@ public class DecodeShootingAuto extends LinearOpMode {
 
         // Ensure kicker is retracted
         revolver.kickerRetract();
+
+        // SYNC SUBSYSTEM CONFIG WITH AUTO CONSTANTS
+        revolver.fsmShooterPower = SHOOTER_POWER;
+        revolver.fsmIntakePower = INTAKE_POWER;
+        revolver.disableFSMKickerControl = false; // Auto uses direct control methods anyway, but keep FSM available if
+                                                  // needed
 
         // Build trajectories
         Action moveToAprilTag = drive.actionBuilder(startPose)
@@ -230,7 +237,6 @@ public class DecodeShootingAuto extends LinearOpMode {
             telemetry.addData("STEP 6", "No balls collected - skipping");
             telemetry.update();
         }
-
         // ========================================
         // STEP 7: Park
         // ========================================
@@ -252,6 +258,7 @@ public class DecodeShootingAuto extends LinearOpMode {
 
     private void showStep(String step, String desc) {
         telemetry.addData("STEP", step + ": " + desc);
+        telemetry.addData("Shooter Power", SHOOTER_POWER); // Added telemetry
         telemetry.update();
     }
 
@@ -488,11 +495,14 @@ public class DecodeShootingAuto extends LinearOpMode {
         private final double moveSpeed = 0.1; // Calibrated for reliable movement
         private final double targetHeading = Math.toRadians(278); // Target heading during intake
         private final double headingKp = 2.0; // Proportional gain for heading correction
+        private final double strafeKp = 0.15; // Proportional gain for strafe (X drift) correction
 
         private int state = STATE_MOVING_FORWARD; // Start scanning immediately
         private int ballsCollected = 0;
         private long indexStartTime = 0;
         private long actionStartTime = 0;
+        private double targetX = 0; // Capture starting X to maintain straight line
+        private boolean initialized = false;
         private RevolverSubsystem.SlotColor lastDetected = RevolverSubsystem.SlotColor.EMPTY;
 
         public SmartIntakeAction(int targetBalls) {
@@ -501,16 +511,33 @@ public class DecodeShootingAuto extends LinearOpMode {
 
         @Override
         public boolean run(@NonNull TelemetryPacket packet) {
-            if (actionStartTime == 0) {
+            if (!initialized) {
+                // Capture the starting X position once
+                targetX = drive.localizer.getPose().position.x;
                 actionStartTime = System.currentTimeMillis();
+                initialized = true;
+
+                // Capture the starting X position once
+                targetX = drive.localizer.getPose().position.x;
+                actionStartTime = System.currentTimeMillis();
+                initialized = true;
             }
+
+            // CRITICAL: Update Pose Estimate!
+            // Without this, currentPose is frozen, causing constant drift error and
+            // "circles".
+            drive.updatePoseEstimate();
 
             long elapsed = System.currentTimeMillis() - actionStartTime;
 
-            // Safety timeout: 20 seconds max
-            if (elapsed >= 20000) {
+            // Safety timeout: Reduced to 12 seconds (was 20s)
+            if (elapsed >= 12000) {
                 drive.setDrivePowers(new PoseVelocity2d(new Vector2d(0, 0), 0));
                 revolver.setIntakePowerDirect(0);
+
+                // Revert motor modes
+                // cleanupMotorModes(); // Logic removed
+
                 telemetry.addData("Smart Intake", "TIMEOUT");
                 telemetry.update();
                 return false;
@@ -519,6 +546,46 @@ public class DecodeShootingAuto extends LinearOpMode {
             // Get current robot pose
             Pose2d currentPose = drive.localizer.getPose();
             double currentY = currentPose.position.y;
+            double currentX = currentPose.position.x;
+
+            // Calculate Errors for Closed-Loop Control
+            // 1. Heading Error
+            double headingError = targetHeading - currentPose.heading.toDouble();
+            while (headingError > Math.PI)
+                headingError -= 2 * Math.PI;
+            while (headingError < -Math.PI)
+                headingError += 2 * Math.PI;
+
+            // 2. Strafe Error (Drift from target X)
+            // Error is difference between target X and current X
+            // In robot frame: Y is left/right.
+            // If robot is rotated 270 deg (facing -Y), global X+ is robot Y+.
+            // Let's rely on field-centric coordinate error first, then rotate to robot
+            // frame?
+            // Actually, drive.setDrivePowers takes ROBOT RELATIVE speeds.
+            // If facing -Y (270 deg):
+            // Global Y movement -> Robot X movement (Forward)
+            // Global X movement -> Robot Y movement (Strafe)
+            double xError = targetX - currentX;
+
+            // Calculate corrections
+            double turnPower = headingError * headingKp;
+            double strafeCorrection = xError * strafeKp;
+
+            // Note: strafeCorrection sign depends on orientation.
+            // At 270 deg, Global X+ is to the RIGHT of the robot.
+            // If currentX < targetX, xError is positive (need to move Right).
+            // Robot Right is -Y velocity in standard mecanum? No, usually Right is -Y?
+            // Let's assume standard intuitive frame: Y in Vector2d is strafe left/right.
+            // Usually +Y is Left, -Y is Right.
+            // So if we need to move X+ (Right), we need negative strafe?
+            // Let's verify orientation: 278 deg is roughly -Y direction.
+            // Robot Forward is -Y global.
+            // Robot Left is +X global.
+            // So if currentX < targetX, we are too far Left (global -X). We need to move
+            // Global X+ (Robot Left).
+            // So positive xError => Positive Strafe (Left).
+            // strafeCorrection = xError * strafeKp; (Positive moves Left)
 
             // Read color sensor
             RevolverSubsystem.SlotColor detected = revolver.readColorNow();
@@ -528,8 +595,9 @@ public class DecodeShootingAuto extends LinearOpMode {
             // Telemetry header
             String stateNames[] = { "MOVING_FWD", "PAUSED", "RETURNING", "DONE" };
             telemetry.addData("State", stateNames[state]);
-            telemetry.addData("Position", "(%.1f, %.1f)", currentPose.position.x, currentY);
-            telemetry.addData("Balls", "%d/%d", ballsCollected, targetBalls);
+            telemetry.addData("Position", "(%.1f, %.1f)", currentX, currentY);
+            telemetry.addData("Target X", "%.1f", targetX);
+            telemetry.addData("Drift Err", "%.2f (Corr: %.2f)", xError, strafeCorrection);
             telemetry.addData("Color", detected.toString());
 
             // State machine
@@ -558,22 +626,11 @@ public class DecodeShootingAuto extends LinearOpMode {
                         state = STATE_RETURNING;
                         telemetry.addLine("Target balls collected, returning");
                     } else {
-                        // Continue moving forward with heading correction
-                        double headingError = targetHeading - currentPose.heading.toDouble();
-                        // Normalize error to [-PI, PI]
-                        while (headingError > Math.PI)
-                            headingError -= 2 * Math.PI;
-                        while (headingError < -Math.PI)
-                            headingError += 2 * Math.PI;
-
-                        double turnPower = headingError * headingKp;
-
+                        // Forward movement with Closed-Loop Correction
                         drive.setDrivePowers(new PoseVelocity2d(
-                                new Vector2d(moveSpeed, 0), turnPower));
-                        telemetry.addData("[MOVING FWD]", "Y=%.1f Hdg=%.1f°",
-                                currentY, Math.toDegrees(currentPose.heading.toDouble()));
-                        telemetry.addData("Heading Err", "%.1f° Turn=%.2f",
-                                Math.toDegrees(headingError), turnPower);
+                                new Vector2d(moveSpeed, strafeCorrection), turnPower));
+
+                        telemetry.addData("[MOVING FWD]", "Vel=%.2f, Strafe=%.2f", moveSpeed, strafeCorrection);
                     }
                     break;
 
@@ -600,22 +657,24 @@ public class DecodeShootingAuto extends LinearOpMode {
                     revolver.setIntakePowerDirect(0); // Stop intake during return
 
                     double distToReturn = Math.abs(currentY - startY);
-                    telemetry.addData("[RETURNING]", "Dist=%.1f Y=%.1f->%.1f", distToReturn, currentY, startY);
+                    telemetry.addData("[RETURNING]", "Dist=%.1f", distToReturn);
 
                     if (distToReturn < 3 || currentY >= startY - 1) { // Increased tolerance + upper bound
                         drive.setDrivePowers(new PoseVelocity2d(new Vector2d(0, 0), 0));
                         state = STATE_DONE;
                         telemetry.addLine("*** RETURN COMPLETE - STOPPED ***");
                     } else {
-                        // Move back (negative X in robot frame = positive Y in field)
+                        // Move back with Closed-Loop Correction
+                        // Note: moveSpeed is negative for return, but strafe/turn logic remains same
                         drive.setDrivePowers(new PoseVelocity2d(
-                                new Vector2d(-0.3, 0), 0)); // Faster return, moving backward
+                                new Vector2d(-0.3, strafeCorrection), turnPower));
                     }
                     break;
 
                 case STATE_DONE:
                     drive.setDrivePowers(new PoseVelocity2d(new Vector2d(0, 0), 0));
                     revolver.setIntakePowerDirect(0);
+                    // cleanupMotorModes(); // Logic removed
                     return false; // Action complete
             }
 
@@ -631,5 +690,14 @@ public class DecodeShootingAuto extends LinearOpMode {
 
             return true;
         }
+
+        /*
+         * private void cleanupMotorModes() {
+         * drive.leftFront.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+         * drive.leftBack.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+         * drive.rightBack.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+         * drive.rightFront.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+         * }
+         */
     }
 }

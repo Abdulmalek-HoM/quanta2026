@@ -59,7 +59,7 @@ KICKER\_EXTEND\_MS & 600 & Kicker ejection duration \\
 KICKER\_RETRACT\_MS & 400 & Kicker retraction duration \\
 INDEXER\_SETTLE\_MS & 500 & Time for indexer to stabilize \\
 INTAKE\_PAUSE\_MS & 1200 & Time for indexer to create empty slot \\
-SHOOTER\_POWER & 0.4 & Shooter motor power \\
+SHOOTER\_POWER & 0.5 & Shooter motor power \\
 \hline
 \end{tabular}
 \end{center}
@@ -353,6 +353,41 @@ Park & -5 & -53 & 90° & Final parking \\
         \item Verify \texttt{indexerNextSlot()} is called
         \item Check \texttt{TICKS\_PER\_SLOT = 96}
         \item Verify \texttt{isIndexerAtTarget()} returns correctly
+    \end{itemize}
+\end{enumerate}
+
+
+
+% ============================================================================
+\section{Future Work (Tomorrow's Checklist)}
+% ============================================================================
+
+\begin{enumerate}
+    \item \textbf{Increase Shooting Power}
+    \begin{itemize}
+        \item Optimize power level for range and speed (target > 0.5).
+        \item Verify trajectory with higher power.
+    \end{itemize}
+
+    \item \textbf{Create Red Team Version}
+    \begin{itemize}
+        \item Duplicate autonomous for Red Alliance.
+        \item Mirror coordinates (Y axis inversion).
+        \item Adjust heading targets.
+    \end{itemize}
+
+    \item \textbf{Correct Intake Speed}
+    \begin{itemize}
+        \item Tune \texttt{moveSpeed} in \texttt{SmartIntakeAction}.
+        \item Verify intake motor power efficiency.
+        \item Ensure synchronization with robot velocity.
+    \end{itemize}
+
+    \item \textbf{Correct Distance Moved}
+    \begin{itemize}
+        \item Calibrate \texttt{endY} coordinate in \texttt{SmartIntakeAction}.
+        \item Verify "Travel Distance" vs "Intake Distance".
+        \item Adjust \texttt{TIMEOUT\_MS} if distance changes.
     \end{itemize}
 \end{enumerate}
 

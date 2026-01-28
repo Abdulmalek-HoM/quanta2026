@@ -78,6 +78,10 @@ public class RevolverSubsystem {
     // Flag to disable FSM kicker control (for TeleOp direct control)
     public boolean disableFSMKickerControl = false;
 
+    // Configurable FSM Power Settings (can be changed by OpModes)
+    public double fsmShooterPower = 0.67;
+    public double fsmIntakePower = 1.0;
+
     public RevolverSubsystem(HardwareMap hardwareMap) {
         indexer = hardwareMap.get(DcMotorEx.class, "indexer");
         intake = hardwareMap.get(DcMotorEx.class, "intake");
@@ -124,7 +128,7 @@ public class RevolverSubsystem {
 
                 if (inventory[currentIntakeSlot] == SlotColor.EMPTY) {
                     if (intakeEnabled)
-                        intake.setPower(INTAKE_POWER);
+                        intake.setPower(fsmIntakePower);
                     else
                         intake.setPower(0);
 
@@ -183,7 +187,7 @@ public class RevolverSubsystem {
 
             case SHOOTING_ALIGN:
                 intake.setPower(0);
-                setShooterPower(1.0);
+                setShooterPower(fsmShooterPower); // Spin up while aligning
 
                 if (!aligningStarted) {
                     // Start Alignment Logic - CALCULATE ONCE!
@@ -221,7 +225,7 @@ public class RevolverSubsystem {
 
             case READY_TO_SHOOT:
                 intake.setPower(0);
-                setShooterPower(0.67); // Keep spinning
+                setShooterPower(fsmShooterPower); // Keep spinning
 
                 if (manualTrigger) {
                     currentState = RevolverState.SHOOTING;
@@ -403,8 +407,15 @@ public class RevolverSubsystem {
         return globalTargetTicks;
     }
 
+    // Track mode locally to avoid excessive hardware calls
+    private DcMotor.RunMode currentShooterMode = DcMotor.RunMode.RUN_USING_ENCODER;
+
     // External Controls
     public void setShooterPower(double power) {
+        if (currentShooterMode != DcMotor.RunMode.RUN_USING_ENCODER) {
+            shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            currentShooterMode = DcMotor.RunMode.RUN_USING_ENCODER;
+        }
         shooter.setVelocity(power * 3000);
         shooter.setPower(power);
     }
@@ -449,10 +460,15 @@ public class RevolverSubsystem {
 
     /**
      * Direct shooter power control for autonomous.
+     * Switches to RUN_WITHOUT_ENCODER for true voltage control (low power).
      * 
      * @param power Motor power (0.0 to 1.0)
      */
     public void setShooterPowerDirect(double power) {
+        if (currentShooterMode != DcMotor.RunMode.RUN_WITHOUT_ENCODER) {
+            shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            currentShooterMode = DcMotor.RunMode.RUN_WITHOUT_ENCODER;
+        }
         shooter.setPower(power);
     }
 

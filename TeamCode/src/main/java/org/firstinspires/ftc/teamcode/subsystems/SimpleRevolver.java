@@ -17,14 +17,14 @@ public class SimpleRevolver {
     // Constants
     // NOTE: If your motor has a gearbox, multiply these by the ratio!
     // Example: 2:1 gear ratio -> set GEAR_RATIO = 2.0
-    private static final double GEAR_RATIO = 1.0; 
-    private static final int TICKS_PER_REV = (int)(288 * GEAR_RATIO); 
+    private static final double GEAR_RATIO = 1.0;
+    private static final int TICKS_PER_REV = (int) (288 * GEAR_RATIO);
     private static final int TICKS_PER_SLOT = TICKS_PER_REV / 3; // 96
     private static final int TICKS_TO_SHOOTER = (TICKS_PER_SLOT * 2); // 192 (2 slots away)
 
     private static final double INDEXER_POWER = 0.5;
     private static final double KICKER_EJECT = 0.8; // Adjust as needed
-    private static final double KICKER_RETRACT = 0.3; 
+    private static final double KICKER_RETRACT = 0.3;
 
     // State Variables
     private int targetTicks = 0;
@@ -44,14 +44,14 @@ public class SimpleRevolver {
         indexer.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         indexer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         indexer.setVelocityPIDFCoefficients(50, 2, 1, 12); // Stiff holding
-        
+
         // Intake Setup
         intake.setDirection(DcMotorSimple.Direction.REVERSE);
         intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        
+
         // Shooter Setup
         shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        
+
         kicker.setPosition(KICKER_RETRACT);
     }
 
@@ -65,7 +65,7 @@ public class SimpleRevolver {
         // Kicker Logic
         if (isKicking) {
             long elapsed = System.currentTimeMillis() - kickTimer;
-            
+
             if (elapsed < 500) {
                 // Spool up time (Wait for Shooter)
                 kicker.setPosition(KICKER_RETRACT);
@@ -74,9 +74,9 @@ public class SimpleRevolver {
             } else if (elapsed < 1700) { // 1100 + 600 (Retract Safety)
                 kicker.setPosition(KICKER_RETRACT);
             } else {
-                isKicking = false; 
+                isKicking = false;
                 // Auto-stop shooter after kick? Optional.
-                // setShooterPower(0); 
+                // setShooterPower(0);
             }
         }
     }
@@ -87,7 +87,8 @@ public class SimpleRevolver {
      * Move ONE slot forward (Load Logic)
      */
     public void moveNextSlot() {
-        if (isKicking) return; // Safety: Block rotation while kicker is active
+        if (isKicking)
+            return; // Safety: Block rotation while kicker is active
         targetTicks += TICKS_PER_SLOT;
     }
 
@@ -95,19 +96,20 @@ public class SimpleRevolver {
      * Move TWO slots forward (Shoot Logic)
      */
     public void moveToShooter() {
-        if (isKicking) return; // Safety: Block rotation while kicker is active
+        if (isKicking)
+            return; // Safety: Block rotation while kicker is active
         targetTicks += TICKS_TO_SHOOTER;
     }
 
     /**
-     * Start the kick sequence. 
+     * Start the kick sequence.
      * You should usually call this AFTER arriving at the shooter position.
      */
     public void kick() {
         isKicking = true;
         kickTimer = System.currentTimeMillis();
     }
-    
+
     /**
      * Manual Trim adjustment. Useful if the tick counts are slightly off.
      */
@@ -122,10 +124,25 @@ public class SimpleRevolver {
     public void setShooterPower(double power) {
         shooter.setPower(power);
     }
-    
+
+    /**
+     * Direct raw power control (Added for API compatibility with A1)
+     */
+    public void setShooterPowerDirect(double power) {
+        shooter.setPower(power);
+    }
+
     // --- Telemetry ---
-    
-    public int getCurrentPos() { return indexer.getCurrentPosition(); }
-    public int getTargetPos() { return targetTicks; }
-    public boolean isBusy() { return indexer.isBusy(); }
+
+    public int getCurrentPos() {
+        return indexer.getCurrentPosition();
+    }
+
+    public int getTargetPos() {
+        return targetTicks;
+    }
+
+    public boolean isBusy() {
+        return indexer.isBusy();
+    }
 }

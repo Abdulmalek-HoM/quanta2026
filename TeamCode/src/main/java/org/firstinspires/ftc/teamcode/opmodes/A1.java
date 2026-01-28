@@ -12,6 +12,15 @@ import org.firstinspires.ftc.teamcode.subsystems.SimpleRevolver;
 @TeleOp(name = "A1", group = "Test")
 public class A1 extends OpMode {
 
+    // =========================================================================
+    // CONFIGURABLE MOTOR POWER SETTINGS - Adjust these values as needed
+    // =========================================================================
+    public static double SHOOTER_POWER = 0.5; // Shooter motor power (0.0 to 1.0)
+    public static double INTAKE_POWER = 1.0; // Intake motor power (0.0 to 1.0)
+    public static double DRIVE_SPEED_NORMAL = 0.7; // Normal drive speed
+    public static double DRIVE_SPEED_SLOW = 0.3; // Slow mode drive speed
+    // =========================================================================
+
     // Subsystems
     private SimpleRevolver revolver;
 
@@ -32,8 +41,8 @@ public class A1 extends OpMode {
     private boolean lastUp = false;
     private boolean lastDown = false;
 
-    // Drivetrain Multiplier
-    private double multiplier = 0.65;
+    // Drivetrain multiplier (updated from constants)
+    private double multiplier = DRIVE_SPEED_NORMAL;
 
     @Override
     public void init() {
@@ -90,10 +99,9 @@ public class A1 extends OpMode {
         // I will use default multiplier 0.8 usually, or 0.5 as per Manual Detection.
         // Let's map Slow Mode to Right Bumper (since LB is Kick).
         if (gamepad1.right_bumper) {
-            multiplier = 0.3;
+            multiplier = DRIVE_SPEED_SLOW;
         } else {
-            multiplier = 0.7; // Increased slightly from 0.5 for better response, or stick to 0.5? code had
-                              // 0.5 default.
+            multiplier = DRIVE_SPEED_NORMAL;
         }
 
         double x = gamepad1.left_stick_x;
@@ -130,9 +138,9 @@ public class A1 extends OpMode {
 
         // 1. Intake Control (Triggers)
         if (gamepad1.right_trigger > 0.1) {
-            revolver.setIntakePower(1.0);
+            revolver.setIntakePower(INTAKE_POWER);
         } else if (gamepad1.left_trigger > 0.1) {
-            revolver.setIntakePower(-1.0);
+            revolver.setIntakePower(-INTAKE_POWER);
         } else {
             revolver.setIntakePower(0);
         }
@@ -147,9 +155,9 @@ public class A1 extends OpMode {
         if (gamepad1.circle && !lastCircle) {
             isShooterOn = !isShooterOn;
             if (isShooterOn) {
-                revolver.setShooterPower(0.67);
+                revolver.setShooterPowerDirect(SHOOTER_POWER);
             } else {
-                revolver.setShooterPower(0);
+                revolver.setShooterPowerDirect(0);
             }
         }
         lastCircle = gamepad1.circle;
@@ -174,7 +182,7 @@ public class A1 extends OpMode {
 
         // Telemetry
         telemetry.addData("Mode", "A1 - Drive + Revolver");
-        telemetry.addData("Shooter", isShooterOn ? "ON (0.8)" : "OFF");
+        telemetry.addData("Shooter", (isShooterOn ? "ON" : "OFF") + " (Power: " + SHOOTER_POWER + ")");
         telemetry.addData("Heading", String.format("%.1f deg", Math.toDegrees(botHeading)));
         telemetry.addData("Revolver Tgt", revolver.getTargetPos());
         telemetry.addData("Controls", "RT/LT:Intake, LB:Kick, RB:Slow, O:Shoot, X:Next");

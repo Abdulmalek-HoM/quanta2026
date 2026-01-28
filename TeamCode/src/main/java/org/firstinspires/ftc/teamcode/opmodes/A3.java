@@ -12,6 +12,15 @@ import org.firstinspires.ftc.teamcode.subsystems.RevolverSubsystem;
 @TeleOp(name = "A3 - Smart Indexing", group = "Competition")
 public class A3 extends OpMode {
 
+    // =========================================================================
+    // CONFIGURABLE MOTOR POWER SETTINGS - Adjust these values as needed
+    // =========================================================================
+    public static double SHOOTER_POWER = 0.5; // Shooter motor power
+    public static double INTAKE_POWER = 1.0; // Intake motor power
+    public static double DRIVE_SPEED_NORMAL = 0.7; // Normal drive speed
+    public static double DRIVE_SPEED_SLOW = 0.3; // Slow mode drive speed
+    // =========================================================================
+
     // Subsystems
     private RevolverSubsystem revolver;
 
@@ -44,12 +53,16 @@ public class A3 extends OpMode {
     private static final long INDEX_COOLDOWN_MS = 800; // Prevent double-indexing
 
     // Drivetrain Multiplier
-    private double multiplier = 0.65;
+    private double multiplier = DRIVE_SPEED_NORMAL;
 
     @Override
     public void init() {
         // 1. Initialize Revolver (RevolverSubsystem for smart indexing)
         revolver = new RevolverSubsystem(hardwareMap);
+
+        // SYNC FSM CONFIG WITH OPMODE CONSTANTS
+        revolver.fsmShooterPower = SHOOTER_POWER;
+        revolver.fsmIntakePower = INTAKE_POWER;
 
         // CRITICAL: Disable FSM kicker control so A3 can control it directly
         revolver.disableFSMKickerControl = true;
@@ -96,9 +109,9 @@ public class A3 extends OpMode {
 
         // Speed Multiplier (Right Bumper = Slow Mode)
         if (gamepad1.right_bumper) {
-            multiplier = 0.3;
+            multiplier = DRIVE_SPEED_SLOW;
         } else {
-            multiplier = 0.7;
+            multiplier = DRIVE_SPEED_NORMAL;
         }
 
         double x = gamepad1.left_stick_x;
@@ -127,10 +140,10 @@ public class A3 extends OpMode {
         // 1. Intake Control + Auto-Indexing
         boolean intaking = false;
         if (gamepad1.right_trigger > 0.1) {
-            revolver.setIntakePowerDirect(1.0);
+            revolver.setIntakePowerDirect(INTAKE_POWER);
             intaking = true;
         } else if (gamepad1.left_trigger > 0.1) {
-            revolver.setIntakePowerDirect(-1.0);
+            revolver.setIntakePowerDirect(-INTAKE_POWER);
         } else {
             revolver.setIntakePowerDirect(0);
         }
@@ -169,7 +182,7 @@ public class A3 extends OpMode {
         if (gamepad1.circle && !lastCircle) {
             isShooterOn = !isShooterOn;
             if (isShooterOn) {
-                revolver.setShooterPowerDirect(0.67);
+                revolver.setShooterPowerDirect(SHOOTER_POWER);
             } else {
                 revolver.setShooterPowerDirect(0);
             }
@@ -217,7 +230,7 @@ public class A3 extends OpMode {
         // TELEMETRY
         // =========================================================================
         telemetry.addData("Mode", "A3 - Smart Auto-Index");
-        telemetry.addData("Shooter", isShooterOn ? "ON (0.67)" : "OFF");
+        telemetry.addData("Shooter", (isShooterOn ? "ON" : "OFF") + " (Power: " + SHOOTER_POWER + ")");
         telemetry.addData("Detected", lastDetectedColor.toString());
         telemetry.addData("Indexer Pos", revolver.getIndexerPosition());
         telemetry.addData("Heading", String.format("%.1f°", Math.toDegrees(botHeading)));
