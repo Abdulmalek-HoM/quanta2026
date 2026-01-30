@@ -114,6 +114,12 @@ public class A5 extends OpMode {
     // Drivetrain Multiplier
     private double multiplier = DRIVE_SPEED_NORMAL;
 
+    // Software PID state for indexer
+    private int indexerTargetPosition = 0;
+    private double indexerIntegral = 0;
+    private double indexerLastError = 0;
+    private long lastPIDUpdateTime = 0;
+
     @Override
     public void init() {
         // 1. Initialize Revolver (RevolverSubsystem for smart indexing)
@@ -137,17 +143,23 @@ public class A5 extends OpMode {
         PIDFCoefficients shooterPIDF = new PIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F);
         shooterMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, shooterPIDF);
 
-        telemetry.addData("Shooter PIDF", "P=%.1f I=%.1f D=%.1f F=%.1f", SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F);
+        telemetry.addData("Shooter PIDF", String.format("P=%.1f I=%.1f D=%.1f F=%.1f",
+                (double) SHOOTER_P, (double) SHOOTER_I, (double) SHOOTER_D, (double) SHOOTER_F));
 
-        // 4. Configure INDEXER motor with custom PIDF to prevent drift
+        // 4. Configure INDEXER motor - use RUN_WITHOUT_ENCODER for software PID control
+        // NOTE: Hardware PIDF for RUN_TO_POSITION is not supported on all REV Hub
+        // motors
+        // We will implement software-based position control instead
         indexerMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        indexerMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        indexerMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        indexerMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Apply indexer PIDF coefficients
-        PIDFCoefficients indexerPIDF = new PIDFCoefficients(INDEXER_P, INDEXER_I, INDEXER_D, INDEXER_F);
-        indexerMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_TO_POSITION, indexerPIDF);
+        // Initialize software PID target
+        indexerTargetPosition = 0;
 
-        telemetry.addData("Indexer PIDF", "P=%.1f I=%.1f D=%.1f F=%.1f", INDEXER_P, INDEXER_I, INDEXER_D, INDEXER_F);
+        telemetry.addData("Indexer Mode", "Software PID Control");
+        telemetry.addData("Indexer PIDF", String.format("P=%.1f I=%.1f D=%.1f F=%.1f",
+                (double) INDEXER_P, (double) INDEXER_I, (double) INDEXER_D, (double) INDEXER_F));
 
         // 5. Initialize AprilTag Navigator
         tagNavigator = new AprilTagNavigator(hardwareMap, "webCam1");
@@ -360,6 +372,11 @@ public class A5 extends OpMode {
         revolver.update();
 
         // =========================================================================
+        // SOFTWARE PID CONTROL FOR INDEXER (bypasses RevolverSubsystem)
+        // =========================================================================
+        updateIndexerPID();
+
+        // =========================================================================
         // TELEMETRY - Enhanced for Velocity + PIDF Monitoring
         // =========================================================================
         telemetry.addData("Mode", "A5 - Velocity + PIDF");
@@ -371,16 +388,17 @@ public class A5 extends OpMode {
         // Shooter status with velocity info
         double currentShooterVelocity = shooterMotor.getVelocity();
         telemetry.addData("Shooter", isShooterOn ? "ON" : "OFF");
-        telemetry.addData("  Target Vel", "%.0f tps", SHOOTER_VELOCITY_TPS);
-        telemetry.addData("  Actual Vel", "%.0f tps", currentShooterVelocity);
-        telemetry.addData("  Error", "%.1f%%",
-                isShooterOn && SHOOTER_VELOCITY_TPS > 0
-                        ? ((SHOOTER_VELOCITY_TPS - currentShooterVelocity) / SHOOTER_VELOCITY_TPS * 100)
-                        : 0);
+        telemetry.addData("  Target Vel", String.format("%.0f tps", (double) SHOOTER_VELOCITY_TPS));
+        telemetry.addData("  Actual Vel", String.format("%.0f tps", (double) currentShooterVelocity));
+
+        double errorPct = (isShooterOn && SHOOTER_VELOCITY_TPS > 0)
+                ? ((SHOOTER_VELOCITY_TPS - currentShooterVelocity) / SHOOTER_VELOCITY_TPS * 100.0)
+                : 0.0;
+        telemetry.addData("  Error", String.format("%.1f%%", errorPct));
 
         // Indexer status with position info
         telemetry.addLine();
-        telemetry.addData("Indexer Pos", "%.3f", revolver.getIndexerPosition());
+        telemetry.addData("Indexer Pos", String.format("%.3f", (double) revolver.getIndexerPosition()));
         telemetry.addData("  Target", indexerMotor.getTargetPosition());
         telemetry.addData("  Current", indexerMotor.getCurrentPosition());
         telemetry.addData("  At Target", revolver.isIndexerAtTarget() ? "YES" : "no");
@@ -424,5 +442,54 @@ public class A5 extends OpMode {
         rightFront.setPower(rightFrontPower);
         leftBack.setPower(leftBackPower);
         rightBack.setPower(rightBackPower);
+    }
+
+    /**
+     * Software PID controller for indexer position
+     * Called every loop() to maintain position
+     */
+    private void updateIndexerPID() {
+        // Get current time for delta calculation
+        long currentTime = System.currentTimeMillis();
+        if (lastPIDUpdateTime == 0) {
+            lastPIDUpdateTime = currentTime;
+            return;
+        }
+        double dt = (currentTime - lastPIDUpdateTime) / 1000.0; // seconds
+        lastPIDUpdateTime = currentTime;
+
+        // Sync target from RevolverSubsystem using public getter
+        indexerTargetPosition = (int) revolver.getIndexerTargetPos();
+
+        // Calculate error
+        int currentPos = indexerMotor.getCurrentPosition();
+        double error = indexerTargetPosition - currentPos;
+
+        // PID calculations
+        indexerIntegral += error * dt;
+        // Anti-windup: clamp integral
+        indexerIntegral = Math.max(-1000, Math.min(1000, indexerIntegral));
+
+        double derivative = (error - indexerLastError) / dt;
+        indexerLastError = error;
+
+        // Calculate power output
+        double power = (INDEXER_P * error / 1000.0) +
+                (INDEXER_I * indexerIntegral / 1000.0) +
+                (INDEXER_D * derivative / 1000.0);
+
+        // Clamp power to [-1, 1]
+        power = Math.max(-1.0, Math.min(1.0, power));
+
+        // Apply power to motor
+        indexerMotor.setPower(power);
+    }
+
+    /**
+     * Set new indexer target position for software PID
+     */
+    private void setIndexerTarget(int targetTicks) {
+        indexerTargetPosition = targetTicks;
+        indexerIntegral = 0; // Reset integral on new target
     }
 }
