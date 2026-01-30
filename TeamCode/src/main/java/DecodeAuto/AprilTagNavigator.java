@@ -45,7 +45,7 @@ public class AprilTagNavigator {
             visionPortal = new VisionPortal.Builder()
                     .setCamera(hardwareMap.get(WebcamName.class, webcamName))
                     .addProcessor(aprilTag)
-                    .setCameraResolution(new Size(640, 480))
+                    .setCameraResolution(new Size(1280, 720))
                     .setStreamFormat(VisionPortal.StreamFormat.MJPEG)
                     .enableLiveView(true)
                     .build();

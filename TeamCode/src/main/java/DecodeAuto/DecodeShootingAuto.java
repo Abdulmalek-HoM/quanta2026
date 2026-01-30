@@ -36,8 +36,8 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 public class DecodeShootingAuto extends LinearOpMode {
 
     // === CONFIGURABLE POSITION ===
-    public static double START_X = -55;
-    public static double START_Y = -55;
+    public static double START_X = -56;  //-56, -47
+    public static double START_Y = -47;
     public static double START_HEADING_DEG = 55;
 
     // === TIMING CONFIGURATION (milliseconds) ===
@@ -49,7 +49,7 @@ public class DecodeShootingAuto extends LinearOpMode {
     public static long INTAKE_PAUSE_MS = 1200; // INCREASED: Wait for indexer to create empty slot
 
     // === POWER SETTINGS ===
-    public static double SHOOTER_POWER = 0.5; // Using setShooterPowerDirect (raw PWM) to avoid velocity PID max-speed
+    public static double SHOOTER_POWER = 0.7; // Using setShooterPowerDirect (raw PWM) to avoid velocity PID max-speed
                                               // issue
     public static double INTAKE_POWER = 1.0;
 
@@ -81,25 +81,30 @@ public class DecodeShootingAuto extends LinearOpMode {
 
         // Build trajectories
         Action moveToAprilTag = drive.actionBuilder(startPose)
-                .strafeToLinearHeading(new Vector2d(-37, -13), Math.toRadians(160))
+                .strafeToLinearHeading(new Vector2d(-43, -31), Math.toRadians(160))
                 .build();
 
         // Shooting position with BACKUP for better angle
-        Action moveToShooting1 = drive.actionBuilder(new Pose2d(-37, -13, Math.toRadians(160)))
-                .strafeToLinearHeading(new Vector2d(-35, -31), Math.toRadians(230)) // Back up 5 units
+        Action moveToShooting1 = drive.actionBuilder(new Pose2d(-43, -31, Math.toRadians(160)))
+                .strafeToLinearHeading(new Vector2d(-41, -33), Math.toRadians(240)) // Back up 5 units
                 .build();
 
         // Move to intake starting position
-        Action moveToIntakeStart = drive.actionBuilder(new Pose2d(-35, -31, Math.toRadians(230)))
-                .strafeToLinearHeading(new Vector2d(-11, -20), Math.toRadians(278))
+        Action moveToIntakeStart = drive.actionBuilder(new Pose2d(-41, -33, Math.toRadians(240)))
+//                .strafeToLinearHeading(new Vector2d(-7, -5), Math.toRadians(285))
+//                .splineTo(new Vector2d(-20, -12), Math.toRadians(282)) //this one is good
+//                .splineToConstantHeading(new Vector2d(-16, -12), Math.toRadians(280)) /// hits the balls
+//                .strafeToSplineHeading(new Vector2d(-16, -12), Math.toRadians(285))
+                .strafeTo(new Vector2d(-13, -5))
+                .turnTo(Math.toRadians(280))
                 .build();
 
-        Action moveToShooting2 = drive.actionBuilder(new Pose2d(-11, -20, Math.toRadians(278)))
-                .strafeToLinearHeading(new Vector2d(-35, -31), Math.toRadians(230)) // Same backup position
+        Action moveToShooting2 = drive.actionBuilder(new Pose2d(-13, -5, Math.toRadians(280)))
+                .strafeToLinearHeading(new Vector2d(-41, -33), Math.toRadians(240)) // Same backup position
                 .build();
 
-        Action moveToPark = drive.actionBuilder(new Pose2d(-35, -31, Math.toRadians(230))) // Updated start pos
-                .strafeToLinearHeading(new Vector2d(-5, -53), Math.toRadians(90))
+        Action moveToPark = drive.actionBuilder(new Pose2d(-41, -33, Math.toRadians(240))) // Updated start pos
+                .strafeToLinearHeading(new Vector2d(-5, -30), Math.toRadians(90))
                 .build();
 
         // Init telemetry
@@ -141,7 +146,7 @@ public class DecodeShootingAuto extends LinearOpMode {
         }
 
         telemetry.update();
-        sleep(2000); // Longer pause to review results
+        sleep(500); // Longer pause to review results
 
         // ========================================
         // STEP 2-3: Move to shooting position
@@ -483,17 +488,16 @@ public class DecodeShootingAuto extends LinearOpMode {
      */
     private class SmartIntakeAction implements Action {
         // State constants (enum not allowed in inner class)
-        // Robot starts at (-11, -30) so no need for MOVING_TO_START
         private static final int STATE_MOVING_FORWARD = 0;
         private static final int STATE_PAUSED_FOR_INDEX = 1;
         private static final int STATE_RETURNING = 2;
         private static final int STATE_DONE = 3;
 
         private final int targetBalls;
-        private final double startY = -20; // Updated by user calibration
-        private final double endY = -55;
-        private final double moveSpeed = 0.1; // Calibrated for reliable movement
-        private final double targetHeading = Math.toRadians(278); // Target heading during intake
+        private final double startY = -5; // Updated by user calibration
+        private final double endY = -40;
+        private final double moveSpeed = 0.15; // Calibrated for reliable movement
+        private final double targetHeading = Math.toRadians(280); // Target heading during intake
         private final double headingKp = 2.0; // Proportional gain for heading correction
         private final double strafeKp = 0.15; // Proportional gain for strafe (X drift) correction
 
@@ -530,8 +534,8 @@ public class DecodeShootingAuto extends LinearOpMode {
 
             long elapsed = System.currentTimeMillis() - actionStartTime;
 
-            // Safety timeout: Reduced to 12 seconds (was 20s)
-            if (elapsed >= 12000) {
+            // Safety timeout: Reduced to 10 seconds (was 12s)
+            if (elapsed >= 10000) {
                 drive.setDrivePowers(new PoseVelocity2d(new Vector2d(0, 0), 0));
                 revolver.setIntakePowerDirect(0);
 

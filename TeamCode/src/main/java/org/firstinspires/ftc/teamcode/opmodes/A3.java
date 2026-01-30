@@ -15,7 +15,7 @@ public class A3 extends OpMode {
     // =========================================================================
     // CONFIGURABLE MOTOR POWER SETTINGS - Adjust these values as needed
     // =========================================================================
-    public static double SHOOTER_POWER = 0.5; // Shooter motor power
+    public static double SHOOTER_POWER = 0.7; // Shooter motor power
     public static double INTAKE_POWER = 1.0; // Intake motor power
     public static double DRIVE_SPEED_NORMAL = 0.7; // Normal drive speed
     public static double DRIVE_SPEED_SLOW = 0.3; // Slow mode drive speed
