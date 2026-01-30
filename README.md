@@ -503,13 +503,6 @@ Additional documentation available in `/docs`:
 
 ---
 
-## 👥 Team
-
-**Decode Robotics** - FTC Team  
-Season: 2024-2025 INTO THE DEEP
-
----
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
