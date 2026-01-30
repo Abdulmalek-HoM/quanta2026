@@ -4,7 +4,9 @@ import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.teamcode.subsystems.RevolverSubsystem;
@@ -12,40 +14,67 @@ import DecodeAuto.AprilTagNavigator;
 import DecodeAuto.TagConfiguration;
 
 /**
- * A4 - Competition TeleOp with Smart Auto-Indexing + AprilTag Driver Assistance
+ * A5 - Competition TeleOp with VELOCITY CONTROL + PIDF Tuning
  * 
- * Combines the best of A3 and A2:
- * - Smart auto-indexing from A3 (automatic ball detection and indexing)
- * - AprilTag alignment assistance from A2 (press Y to auto-align to goal)
- * - Alliance selection support (Red/Blue goal targeting)
+ * Based on A4, with the following changes:
+ * - Shooter motor uses VELOCITY control (ticks/sec) instead of raw power
+ * - Indexer motor uses custom PIDF coefficients to prevent position drift
+ * 
+ * All motor parameters are configurable at the top of this file.
  * 
  * Controls:
  * - Y (Triangle): Hold for AprilTag auto-alignment to shooting goal
  * - Share: Toggle alliance (Red ↔ Blue) for correct goal targeting
  * - RT: Intake (auto-indexes when ball detected)
  * - LT: Reverse intake
- * - Circle: Toggle shooter on/off
+ * - Circle: Toggle shooter on/off (VELOCITY MODE)
  * - LB: Kick ball
  * - Cross: Manual index next slot
  * - D-pad Up/Down: Manual indexer trim (±5 ticks)
  * - RB: Slow drive mode
  * - Options: Reset IMU heading
  */
-@TeleOp(name = "A4 - Competition (AprilTag Assist)", group = "Competition")
-public class A4 extends OpMode {
+@TeleOp(name = "A5 - Velocity + PIDF Control", group = "Competition")
+public class A5 extends OpMode {
 
     // =========================================================================
-    // CONFIGURABLE MOTOR POWER SETTINGS
+    // === SHOOTER MOTOR PARAMETERS (VELOCITY CONTROL) ===
     // =========================================================================
-    public static double SHOOTER_POWER = 0.7;
+    /** Shooter target velocity in ticks per second */
+    public static double SHOOTER_VELOCITY_TPS = 2000.0; // max = 3000
+
+    /** Shooter PIDF Coefficients (for RUN_USING_ENCODER mode) */
+    public static double SHOOTER_P = 10.0;
+    public static double SHOOTER_I = 3.0;
+    public static double SHOOTER_D = 0.0;
+    public static double SHOOTER_F = 12.0;
+    // =========================================================================
+
+    // =========================================================================
+    // === INDEXER MOTOR PARAMETERS (POSITION CONTROL WITH PIDF) ===
+    // =========================================================================
+    /** Indexer PIDF Coefficients to prevent position drift */
+    public static double INDEXER_P = 10.0;
+    public static double INDEXER_I = 1.0;
+    public static double INDEXER_D = 2.0;
+    public static double INDEXER_F = 10.0;
+    // =========================================================================
+
+    // =========================================================================
+    // === OTHER MOTOR POWER SETTINGS ===
+    // =========================================================================
     public static double INTAKE_POWER = 1.0;
-    public static double DRIVE_SPEED_NORMAL = 1;
+    public static double DRIVE_SPEED_NORMAL = 1.0;
     public static double DRIVE_SPEED_SLOW = 0.5;
     // =========================================================================
 
     // Subsystems
     private RevolverSubsystem revolver;
     private AprilTagNavigator tagNavigator;
+
+    // Direct motor references for PIDF configuration
+    private DcMotorEx shooterMotor;
+    private DcMotorEx indexerMotor;
 
     // Drivetrain Motors
     private DcMotor leftFront;
@@ -77,7 +106,7 @@ public class A4 extends OpMode {
 
     // State - AprilTag Auto-Alignment
     private boolean isAutoAligning = false;
-    private boolean isRedAlliance = true; // Default to Red, toggle with Share button
+    private boolean isRedAlliance = true;
     private boolean lastShare = false;
     private boolean lastLeftStickButton = false;
     private int targetGoalId = TagConfiguration.ID_RED_SHOOTING_GOAL;
@@ -91,16 +120,39 @@ public class A4 extends OpMode {
         revolver = new RevolverSubsystem(hardwareMap);
 
         // SYNC FSM CONFIG WITH OPMODE CONSTANTS
-        revolver.fsmShooterPower = SHOOTER_POWER;
         revolver.fsmIntakePower = INTAKE_POWER;
 
-        // CRITICAL: Disable FSM kicker control so A4 can control it directly
+        // CRITICAL: Disable FSM kicker control so A5 can control it directly
         revolver.disableFSMKickerControl = true;
 
-        // 2. Initialize AprilTag Navigator
+        // 2. Get direct references to motors for PIDF configuration
+        shooterMotor = hardwareMap.get(DcMotorEx.class, "shooter");
+        indexerMotor = hardwareMap.get(DcMotorEx.class, "indexer");
+
+        // 3. Configure SHOOTER motor for VELOCITY control
+        shooterMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        // Apply shooter PIDF coefficients
+        PIDFCoefficients shooterPIDF = new PIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F);
+        shooterMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, shooterPIDF);
+
+        telemetry.addData("Shooter PIDF", "P=%.1f I=%.1f D=%.1f F=%.1f", SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F);
+
+        // 4. Configure INDEXER motor with custom PIDF to prevent drift
+        indexerMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        indexerMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        // Apply indexer PIDF coefficients
+        PIDFCoefficients indexerPIDF = new PIDFCoefficients(INDEXER_P, INDEXER_I, INDEXER_D, INDEXER_F);
+        indexerMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_TO_POSITION, indexerPIDF);
+
+        telemetry.addData("Indexer PIDF", "P=%.1f I=%.1f D=%.1f F=%.1f", INDEXER_P, INDEXER_I, INDEXER_D, INDEXER_F);
+
+        // 5. Initialize AprilTag Navigator
         tagNavigator = new AprilTagNavigator(hardwareMap, "webCam1");
 
-        // 3. Initialize Drivetrain Motors
+        // 6. Initialize Drivetrain Motors
         leftFront = hardwareMap.get(DcMotor.class, "leftFront");
         leftBack = hardwareMap.get(DcMotor.class, "leftBack");
         rightFront = hardwareMap.get(DcMotor.class, "rightFront");
@@ -118,15 +170,16 @@ public class A4 extends OpMode {
         rightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightBack.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // 4. Initialize IMU
+        // 7. Initialize IMU
         imu = hardwareMap.get(IMU.class, "imu");
         IMU.Parameters parameters = new IMU.Parameters(new RevHubOrientationOnRobot(
                 RevHubOrientationOnRobot.LogoFacingDirection.UP,
                 RevHubOrientationOnRobot.UsbFacingDirection.FORWARD));
         imu.initialize(parameters);
 
-        telemetry.addData("Status", "A4 Competition Mode Ready");
+        telemetry.addData("Status", "A5 - Velocity + PIDF Control Ready");
         telemetry.addData("Alliance", isRedAlliance ? "RED" : "BLUE");
+        telemetry.addData("Shooter Mode", "VELOCITY (" + SHOOTER_VELOCITY_TPS + " tps)");
         telemetry.addData("Info", "Y=AprilTag Align | Share=Toggle Alliance");
     }
 
@@ -155,7 +208,6 @@ public class A4 extends OpMode {
             double[] autoPowers = tagNavigator.getAlignmentPowers(targetGoalId);
 
             if (autoPowers != null) {
-                // AprilTag detected - apply alignment powers
                 double drive = autoPowers[0];
                 double strafe = autoPowers[1];
                 double turn = autoPowers[2];
@@ -164,11 +216,10 @@ public class A4 extends OpMode {
                 telemetry.addData("Auto Align", "TRACKING Tag %d (%s)",
                         targetGoalId, isRedAlliance ? "RED" : "BLUE");
             } else {
-                // Tag not visible - stop for safety
                 moveRobot(0, 0, 0);
                 telemetry.addData("Auto Align", "Tag %d NOT FOUND", targetGoalId);
 
-                // DEBUG: Show what WE DO SEE
+                // DEBUG: Show detected tags
                 java.util.List<org.firstinspires.ftc.vision.apriltag.AprilTagDetection> currentDetections = tagNavigator.aprilTag
                         .getDetections();
                 telemetry.addData("Visible Tags", currentDetections.size());
@@ -176,11 +227,7 @@ public class A4 extends OpMode {
                     if (detection.metadata != null) {
                         telemetry.addData(" - Found", "ID %d (%s)", detection.id, detection.metadata.name);
                     } else {
-                        telemetry.addData(" - Found", "ID %d (Unknown) - ftcPose: %s", detection.id,
-                                (detection.ftcPose == null ? "NULL" : "VALID"));
-                        if (detection.rawPose != null) {
-                            telemetry.addData("   > RawPose", "Available (x=%.2f)", detection.rawPose.x);
-                        }
+                        telemetry.addData(" - Found", "ID %d (Unknown)", detection.id);
                     }
                 }
             }
@@ -208,17 +255,15 @@ public class A4 extends OpMode {
             }
 
             double x = gamepad1.left_stick_x;
-            double y = -gamepad1.left_stick_y; // Inverted Y
+            double y = -gamepad1.left_stick_y;
             double rx = gamepad1.right_stick_x;
 
             YawPitchRollAngles botAngles = imu.getRobotYawPitchRollAngles();
             double botHeading = -botAngles.getYaw(AngleUnit.RADIANS);
 
-            // Field centric transformation
             double rotX = x * Math.cos(botHeading) - y * Math.sin(botHeading);
             double rotY = x * Math.sin(botHeading) + y * Math.cos(botHeading);
 
-            // Denominator to ensure no motor power > 1
             double denominator = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1);
 
             leftFront.setPower(((rotY + rotX + rx) / denominator) * multiplier);
@@ -248,11 +293,9 @@ public class A4 extends OpMode {
             boolean ballDetected = (currentColor == RevolverSubsystem.SlotColor.GREEN ||
                     currentColor == RevolverSubsystem.SlotColor.PURPLE);
 
-            // Edge detection: ball just entered (wasn't there before)
             boolean justDetected = ballDetected &&
                     (lastDetectedColor == RevolverSubsystem.SlotColor.EMPTY);
 
-            // Auto-index with cooldown to prevent double-triggering
             long currentTime = System.currentTimeMillis();
             if (justDetected && (currentTime - lastIndexTime > INDEX_COOLDOWN_MS)) {
                 revolver.indexerNextSlot();
@@ -262,45 +305,41 @@ public class A4 extends OpMode {
 
             lastDetectedColor = currentColor;
         } else {
-            // Reset detection state when not intaking
             lastDetectedColor = RevolverSubsystem.SlotColor.EMPTY;
         }
 
-        // 2. Manual Index (Press Cross) - Always available as override
+        // 2. Manual Index (Press Cross)
         if (gamepad1.cross && !lastCross) {
             revolver.indexerNextSlot();
         }
         lastCross = gamepad1.cross;
 
-        // 3. Shooter Toggle (Press Circle)
+        // 3. Shooter Toggle (Press Circle) - VELOCITY MODE
         if (gamepad1.circle && !lastCircle) {
             isShooterOn = !isShooterOn;
             if (isShooterOn) {
-                revolver.setShooterPowerDirect(SHOOTER_POWER);
+                // Set velocity instead of raw power
+                shooterMotor.setVelocity(SHOOTER_VELOCITY_TPS);
             } else {
-                revolver.setShooterPowerDirect(0);
+                shooterMotor.setVelocity(0);
             }
         }
         lastCircle = gamepad1.circle;
 
-        // 4. Kick (Press Left Bumper) - Direct control
+        // 4. Kick (Press Left Bumper)
         if (gamepad1.left_bumper && !lastLeftBumper) {
             isKicking = true;
             kickTimer = System.currentTimeMillis();
         }
         lastLeftBumper = gamepad1.left_bumper;
 
-        // Direct kicker logic
         if (isKicking) {
             long elapsed = System.currentTimeMillis() - kickTimer;
             if (elapsed < 500) {
-                // Spool up
                 revolver.kicker.setPosition(KICKER_RETRACT);
             } else if (elapsed < 1100) {
-                // Eject
                 revolver.kicker.setPosition(KICKER_EJECT);
             } else if (elapsed < 1700) {
-                // Retract
                 revolver.kicker.setPosition(KICKER_RETRACT);
             } else {
                 isKicking = false;
@@ -321,19 +360,35 @@ public class A4 extends OpMode {
         revolver.update();
 
         // =========================================================================
-        // TELEMETRY
+        // TELEMETRY - Enhanced for Velocity + PIDF Monitoring
         // =========================================================================
-        telemetry.addData("Mode", "A4 - Competition (AprilTag)");
-        telemetry.addData("Camera Mode", AprilTagNavigator.CAMERA_UPSIDE_DOWN ? "UPSIDE DOWN (FLIPPED)" : "NORMAL");
+        telemetry.addData("Mode", "A5 - Velocity + PIDF");
+        telemetry.addData("Camera Mode", AprilTagNavigator.CAMERA_UPSIDE_DOWN ? "UPSIDE DOWN" : "NORMAL");
         telemetry.addData("Alliance", isRedAlliance ? "RED (Tag 24)" : "BLUE (Tag 20)");
         telemetry.addData("Auto Align", isAutoAligning ? "ACTIVE (Y held)" : "OFF");
-        telemetry.addData("Shooter", (isShooterOn ? "ON" : "OFF") + " (Power: " + SHOOTER_POWER + ")");
-        telemetry.addData("Detected Color", lastDetectedColor.toString());
-        telemetry.addData("Indexer Pos", revolver.getIndexerPosition());
         telemetry.addLine();
-        telemetry.addData("Primary", "Y:AprilTag | Share:Alliance | RT:Auto-Intake");
-        telemetry.addData("Secondary", "X:Manual Index | LB:Kick | O:Shooter");
-        telemetry.addData("Adjust", "D-pad:±5 ticks | RB:Slow | Options:Reset IMU");
+
+        // Shooter status with velocity info
+        double currentShooterVelocity = shooterMotor.getVelocity();
+        telemetry.addData("Shooter", isShooterOn ? "ON" : "OFF");
+        telemetry.addData("  Target Vel", "%.0f tps", SHOOTER_VELOCITY_TPS);
+        telemetry.addData("  Actual Vel", "%.0f tps", currentShooterVelocity);
+        telemetry.addData("  Error", "%.1f%%",
+                isShooterOn && SHOOTER_VELOCITY_TPS > 0
+                        ? ((SHOOTER_VELOCITY_TPS - currentShooterVelocity) / SHOOTER_VELOCITY_TPS * 100)
+                        : 0);
+
+        // Indexer status with position info
+        telemetry.addLine();
+        telemetry.addData("Indexer Pos", "%.3f", revolver.getIndexerPosition());
+        telemetry.addData("  Target", indexerMotor.getTargetPosition());
+        telemetry.addData("  Current", indexerMotor.getCurrentPosition());
+        telemetry.addData("  At Target", revolver.isIndexerAtTarget() ? "YES" : "no");
+
+        telemetry.addLine();
+        telemetry.addData("Detected Color", lastDetectedColor.toString());
+        telemetry.addLine();
+        telemetry.addData("Controls", "Y:AprilTag | Share:Alliance | O:Shooter");
         telemetry.update();
     }
 
@@ -342,14 +397,11 @@ public class A4 extends OpMode {
         if (tagNavigator != null) {
             tagNavigator.stop();
         }
+        shooterMotor.setVelocity(0);
     }
 
     /**
      * Robot-centric movement for AprilTag alignment
-     * 
-     * @param x   Forward/backward power
-     * @param y   Strafe left/right power
-     * @param yaw Rotation power
      */
     private void moveRobot(double x, double y, double yaw) {
         double leftFrontPower = x - y - yaw;
@@ -357,7 +409,6 @@ public class A4 extends OpMode {
         double leftBackPower = x + y - yaw;
         double rightBackPower = x - y + yaw;
 
-        // Normalize powers to [-1, 1]
         double max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
         max = Math.max(max, Math.abs(leftBackPower));
         max = Math.max(max, Math.abs(rightBackPower));

@@ -21,7 +21,7 @@ public class AprilTagNavigator {
     private int lastDetectedTagId = -1;
 
     // Drive constants (Adjustable)
-    final double DESIRED_DISTANCE = 12.0;
+    final double DESIRED_DISTANCE = 13.0;
     final double SPEED_GAIN = 0.02;
     final double STRAFE_GAIN = 0.015;
     final double TURN_GAIN = 0.01;
