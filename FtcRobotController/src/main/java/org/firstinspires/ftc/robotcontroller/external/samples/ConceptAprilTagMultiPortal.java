@@ -39,12 +39,12 @@ import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 /**
- * This OpMode demonstrates the basics of using multiple vision portals simultaneously
+ * This OpMode demonstrates the basics of using multiple vision portals
+ * simultaneously
  */
 @TeleOp(name = "Concept: AprilTagMultiPortal", group = "Concept")
 @Disabled
-public class ConceptAprilTagMultiPortal extends LinearOpMode
-{
+public class ConceptAprilTagMultiPortal extends LinearOpMode {
     VisionPortal portal1;
     VisionPortal portal2;
 
@@ -52,15 +52,16 @@ public class ConceptAprilTagMultiPortal extends LinearOpMode
     AprilTagProcessor aprilTagProcessor2;
 
     @Override
-    public void runOpMode() throws InterruptedException
-    {
+    public void runOpMode() throws InterruptedException {
         // Because we want to show two camera feeds simultaneously, we need to inform
         // the SDK that we want it to split the camera monitor area into two smaller
-        // areas for us. It will then give us View IDs which we can pass to the individual
+        // areas for us. It will then give us View IDs which we can pass to the
+        // individual
         // vision portals to allow them to properly hook into the UI in tandem.
         int[] viewIds = VisionPortal.makeMultiPortalView(2, VisionPortal.MultiPortalLayout.VERTICAL);
 
-        // We extract the two view IDs from the array to make our lives a little easier later.
+        // We extract the two view IDs from the array to make our lives a little easier
+        // later.
         // NB: the array is 2 long because we asked for 2 portals up above.
         int portal1ViewId = viewIds[0];
         int portal2ViewId = viewIds[1];
@@ -90,10 +91,11 @@ public class ConceptAprilTagMultiPortal extends LinearOpMode
         waitForStart();
 
         // Main Loop
-        while (opModeIsActive())
-        {
-            // Just show some basic telemetry to demonstrate both processors are working in parallel
-            // on their respective cameras. If you want to see more detail about the information you
+        while (opModeIsActive()) {
+            // Just show some basic telemetry to demonstrate both processors are working in
+            // parallel
+            // on their respective cameras. If you want to see more detail about the
+            // information you
             // can get back from the processor, you should look at ConceptAprilTag.
             telemetry.addData("Number of tags in Camera 1", aprilTagProcessor1.getDetections().size());
             telemetry.addData("Number of tags in Camera 2", aprilTagProcessor2.getDetections().size());

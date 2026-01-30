@@ -79,6 +79,7 @@ public class A4 extends OpMode {
     private boolean isAutoAligning = false;
     private boolean isRedAlliance = true; // Default to Red, toggle with Share button
     private boolean lastShare = false;
+    private boolean lastLeftStickButton = false;
     private int targetGoalId = TagConfiguration.ID_RED_SHOOTING_GOAL;
 
     // Drivetrain Multiplier
@@ -166,6 +167,22 @@ public class A4 extends OpMode {
                 // Tag not visible - stop for safety
                 moveRobot(0, 0, 0);
                 telemetry.addData("Auto Align", "Tag %d NOT FOUND", targetGoalId);
+
+                // DEBUG: Show what WE DO SEE
+                java.util.List<org.firstinspires.ftc.vision.apriltag.AprilTagDetection> currentDetections = tagNavigator.aprilTag
+                        .getDetections();
+                telemetry.addData("Visible Tags", currentDetections.size());
+                for (org.firstinspires.ftc.vision.apriltag.AprilTagDetection detection : currentDetections) {
+                    if (detection.metadata != null) {
+                        telemetry.addData(" - Found", "ID %d (%s)", detection.id, detection.metadata.name);
+                    } else {
+                        telemetry.addData(" - Found", "ID %d (Unknown) - ftcPose: %s", detection.id,
+                                (detection.ftcPose == null ? "NULL" : "VALID"));
+                        if (detection.rawPose != null) {
+                            telemetry.addData("   > RawPose", "Available (x=%.2f)", detection.rawPose.x);
+                        }
+                    }
+                }
             }
 
         } else {
@@ -176,6 +193,12 @@ public class A4 extends OpMode {
             if (gamepad1.options) {
                 imu.resetYaw();
             }
+
+            // TOGGLE CAMERA FLIP (Left Stick Button)
+            if (gamepad1.left_stick_button && !lastLeftStickButton) {
+                AprilTagNavigator.CAMERA_UPSIDE_DOWN = !AprilTagNavigator.CAMERA_UPSIDE_DOWN;
+            }
+            lastLeftStickButton = gamepad1.left_stick_button;
 
             // Speed Multiplier (Right Bumper = Slow Mode)
             if (gamepad1.right_bumper) {
@@ -301,6 +324,7 @@ public class A4 extends OpMode {
         // TELEMETRY
         // =========================================================================
         telemetry.addData("Mode", "A4 - Competition (AprilTag)");
+        telemetry.addData("Camera Mode", AprilTagNavigator.CAMERA_UPSIDE_DOWN ? "UPSIDE DOWN (FLIPPED)" : "NORMAL");
         telemetry.addData("Alliance", isRedAlliance ? "RED (Tag 24)" : "BLUE (Tag 20)");
         telemetry.addData("Auto Align", isAutoAligning ? "ACTIVE (Y held)" : "OFF");
         telemetry.addData("Shooter", (isShooterOn ? "ON" : "OFF") + " (Power: " + SHOOTER_POWER + ")");

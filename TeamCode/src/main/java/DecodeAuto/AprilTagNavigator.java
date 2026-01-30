@@ -29,12 +29,24 @@ public class AprilTagNavigator {
     final double MAX_AUTO_STRAFE = 0.5;
     final double MAX_AUTO_TURN = 0.3;
 
+    // Camera Orientation (Set to true if camera is mounted upside down)
+    public static boolean CAMERA_UPSIDE_DOWN = true;
+
     public AprilTagNavigator(HardwareMap hardwareMap, String webcamName) {
         initAprilTag(hardwareMap, webcamName);
     }
 
     private void initAprilTag(HardwareMap hardwareMap, String webcamName) {
+        // Custom Library for 21cm (approx 8.26 inch) Tags
+        org.firstinspires.ftc.vision.apriltag.AprilTagLibrary.Builder libBuilder = new org.firstinspires.ftc.vision.apriltag.AprilTagLibrary.Builder();
+        libBuilder.addTag(20, "Blue Goal", 8.26, org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH);
+        libBuilder.addTag(21, "Obelisk 1", 8.26, org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH);
+        libBuilder.addTag(22, "Obelisk 2", 8.26, org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH);
+        libBuilder.addTag(23, "Obelisk 3", 8.26, org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH);
+        libBuilder.addTag(24, "Red Goal", 8.26, org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.INCH);
+
         aprilTag = new AprilTagProcessor.Builder()
+                .setTagLibrary(libBuilder.build()) // Use custom sizes
                 .setDrawAxes(true)
                 .setDrawTagOutline(true)
                 .setDrawTagID(true)
@@ -97,7 +109,8 @@ public class AprilTagNavigator {
 
         List<AprilTagDetection> currentDetections = aprilTag.getDetections();
         for (AprilTagDetection detection : currentDetections) {
-            if (detection.metadata != null && detection.id == targetTagId) {
+            // Check ID directly, even if metadata is null
+            if (detection.id == targetTagId) {
                 targetFound = true;
                 desiredTag = detection;
                 break;
@@ -105,9 +118,20 @@ public class AprilTagNavigator {
         }
 
         if (targetFound) {
+            // Safety check: sometimes ftcPose is null if metadata is missing/corrupt
+            if (desiredTag.ftcPose == null) {
+                return null; // Cannot navigate without pose data
+            }
+
             double rangeError = (desiredTag.ftcPose.range - DESIRED_DISTANCE);
             double headingError = desiredTag.ftcPose.bearing;
             double yawError = desiredTag.ftcPose.yaw;
+
+            // Correction for upside-down camera mounting
+            if (CAMERA_UPSIDE_DOWN) {
+                headingError = -headingError;
+                yawError = -yawError;
+            }
 
             double drive = Range.clip(rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
             double turn = Range.clip(headingError * TURN_GAIN, -MAX_AUTO_TURN, MAX_AUTO_TURN);
