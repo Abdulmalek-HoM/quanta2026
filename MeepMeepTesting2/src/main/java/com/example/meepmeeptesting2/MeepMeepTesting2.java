@@ -16,20 +16,20 @@ public class MeepMeepTesting2 {
                 .setConstraints(60, 60, Math.toRadians(180), Math.toRadians(180), 15)
                 .build();
 
-        myBot.runAction(myBot.getDrive().actionBuilder(new Pose2d(58, -24, Math.toRadians(180)))
+        myBot.runAction(myBot.getDrive().actionBuilder(new Pose2d(58, 24, Math.toRadians(180)))
 
                 //1. Shooting position
-                .strafeToLinearHeading(new Vector2d(-57, -12), Math.toRadians(270))
+                .strafeToLinearHeading(new Vector2d(-57, 12), Math.toRadians(90))
 
 
                 .waitSeconds(1)
 
-                //2. Balls smart intake take over position (start from y=-30 up to y=-40 and head back )
-                .splineTo(new Vector2d(12, -30), Math.toRadians(270))
+                //2. Balls smart intake take over position (start from y=30 up to y=57 and head back )
+                .splineTo(new Vector2d(12, 30), Math.toRadians(90))
                 .waitSeconds(1)
 
                 //3. Return to Shooting position
-                .splineTo(new Vector2d(-57, -12), Math.toRadians(270))
+                .splineTo(new Vector2d(-57, 12), Math.toRadians(90))
                 .waitSeconds(1)
 
                 .build());

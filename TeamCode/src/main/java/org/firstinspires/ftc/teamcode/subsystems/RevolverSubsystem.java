@@ -19,7 +19,7 @@ public class RevolverSubsystem {
     private RevColorSensorV3 sensor;
 
     // Constants
-    private static final int TICKS_PER_SLOT = 96; // 120 degrees
+    private static final int TICKS_PER_SLOT = 96; // 120 degrees (Matched to Working A1/SimpleRevolver)
     private static final int TICKS_TO_SHOOTER = 192; // 240 degrees (2 jumps)
     private static final int TICKS_PER_REVOLUTION = 288; // 360 degrees
     private static final double INDEXER_POWER = 0.3;
@@ -94,7 +94,7 @@ public class RevolverSubsystem {
         indexer.setTargetPosition(0);
         indexer.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         indexer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        indexer.setVelocityPIDFCoefficients(40, 5, 5, 10);
+        indexer.setVelocityPIDFCoefficients(50, 2, 1, 12); // Matched to Working A1/SimpleRevolver
 
         intake.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         intake.setDirection(DcMotorSimple.Direction.REVERSE);

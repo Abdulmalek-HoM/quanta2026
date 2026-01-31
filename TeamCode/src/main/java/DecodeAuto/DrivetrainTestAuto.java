@@ -7,6 +7,7 @@ import com.acmerobotics.roadrunner.SequentialAction;
 import com.acmerobotics.roadrunner.Vector2d;
 import com.acmerobotics.roadrunner.ftc.Actions;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.firstinspires.ftc.teamcode.MecanumDrive;
@@ -29,6 +30,7 @@ import org.firstinspires.ftc.teamcode.MecanumDrive;
  * 7. Ramp Gate Position: spline to (-30, -31, 230°)
  */
 @Config
+@Disabled
 @Autonomous(name = "Drivetrain Test Auto v1.0", group = "DecodeAuto")
 public class DrivetrainTestAuto extends LinearOpMode {
 

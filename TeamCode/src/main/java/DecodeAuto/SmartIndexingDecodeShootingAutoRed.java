@@ -91,7 +91,7 @@ public class SmartIndexingDecodeShootingAutoRed extends LinearOpMode {
                 .strafeToLinearHeading(new Vector2d(-41, 33), Math.toRadians(115))
                 .build();
 
-        Action moveToIntakeStart = drive.actionBuilder(new Pose2d(  m;lk-41, 33, Math.toRadians(115)))
+        Action moveToIntakeStart = drive.actionBuilder(new Pose2d(  -41, 33, Math.toRadians(115)))
                 .strafeTo(new Vector2d(-10, 7))
                 .turnTo(Math.toRadians(90))
                 .build();

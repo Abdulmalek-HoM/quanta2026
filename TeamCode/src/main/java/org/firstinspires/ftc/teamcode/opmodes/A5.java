@@ -38,27 +38,15 @@ import DecodeAuto.TagConfiguration;
 public class A5 extends OpMode {
 
     // =========================================================================
-    // === SHOOTER MOTOR PARAMETERS (VELOCITY CONTROL) ===
+    // === SHOOTER MOTOR PARAMETERS (POWER CONTROL) ===
     // =========================================================================
-    /** Shooter target velocity in ticks per second */
-    public static double SHOOTER_VELOCITY_TPS = 2000.0; // max = 3000
-
-    /** Shooter PIDF Coefficients (for RUN_USING_ENCODER mode) */
-    public static double SHOOTER_P = 10.0;
-    public static double SHOOTER_I = 3.0;
-    public static double SHOOTER_D = 0.0;
-    public static double SHOOTER_F = 12.0;
-    // =========================================================================
+    /** Shooter power (0.0 - 1.0) */
+    public static double SHOOTER_POWER = 0.7;
 
     // =========================================================================
-    // === INDEXER MOTOR PARAMETERS (POSITION CONTROL WITH PIDF) ===
+    // === INDEXER PARAMETERS ===
     // =========================================================================
-    /** Indexer PIDF Coefficients to prevent position drift */
-    public static double INDEXER_P = 10.0;
-    public static double INDEXER_I = 1.0;
-    public static double INDEXER_D = 2.0;
-    public static double INDEXER_F = 10.0;
-    // =========================================================================
+    // (Managed by RevolverSubsystem hardware PID)
 
     // =========================================================================
     // === OTHER MOTOR POWER SETTINGS ===
@@ -66,6 +54,7 @@ public class A5 extends OpMode {
     public static double INTAKE_POWER = 1.0;
     public static double DRIVE_SPEED_NORMAL = 1.0;
     public static double DRIVE_SPEED_SLOW = 0.5;
+
     // =========================================================================
 
     // Subsystems
@@ -114,11 +103,7 @@ public class A5 extends OpMode {
     // Drivetrain Multiplier
     private double multiplier = DRIVE_SPEED_NORMAL;
 
-    // Software PID state for indexer
-    private int indexerTargetPosition = 0;
-    private double indexerIntegral = 0;
-    private double indexerLastError = 0;
-    private long lastPIDUpdateTime = 0;
+    // Software PID state removed
 
     @Override
     public void init() {
@@ -135,31 +120,14 @@ public class A5 extends OpMode {
         shooterMotor = hardwareMap.get(DcMotorEx.class, "shooter");
         indexerMotor = hardwareMap.get(DcMotorEx.class, "indexer");
 
-        // 3. Configure SHOOTER motor for VELOCITY control
-        shooterMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        shooterMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        // 3. Configure SHOOTER motor for POWER control (Encoder is broken/reading 0)
+        shooterMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
-        // Apply shooter PIDF coefficients
-        PIDFCoefficients shooterPIDF = new PIDFCoefficients(SHOOTER_P, SHOOTER_I, SHOOTER_D, SHOOTER_F);
-        shooterMotor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, shooterPIDF);
+        // 4. Indexer is configured by RevolverSubsystem (Hardware PID)
+        // We do not override it here.
 
-        telemetry.addData("Shooter PIDF", String.format("P=%.1f I=%.1f D=%.1f F=%.1f",
-                (double) SHOOTER_P, (double) SHOOTER_I, (double) SHOOTER_D, (double) SHOOTER_F));
-
-        // 4. Configure INDEXER motor - use RUN_WITHOUT_ENCODER for software PID control
-        // NOTE: Hardware PIDF for RUN_TO_POSITION is not supported on all REV Hub
-        // motors
-        // We will implement software-based position control instead
-        indexerMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        indexerMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-        indexerMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-
-        // Initialize software PID target
-        indexerTargetPosition = 0;
-
-        telemetry.addData("Indexer Mode", "Software PID Control");
-        telemetry.addData("Indexer PIDF", String.format("P=%.1f I=%.1f D=%.1f F=%.1f",
-                (double) INDEXER_P, (double) INDEXER_I, (double) INDEXER_D, (double) INDEXER_F));
+        telemetry.addData("Shooter Mode", "POWER CONTROL (%.2f)", SHOOTER_POWER);
+        telemetry.addData("Indexer Mode", "Hardware PID (RevolverSubsystem)");
 
         // 5. Initialize AprilTag Navigator
         tagNavigator = new AprilTagNavigator(hardwareMap, "webCam1");
@@ -191,8 +159,8 @@ public class A5 extends OpMode {
 
         telemetry.addData("Status", "A5 - Velocity + PIDF Control Ready");
         telemetry.addData("Alliance", isRedAlliance ? "RED" : "BLUE");
-        telemetry.addData("Shooter Mode", "VELOCITY (" + SHOOTER_VELOCITY_TPS + " tps)");
-        telemetry.addData("Info", "Y=AprilTag Align | Share=Toggle Alliance");
+        telemetry.addData("Shooter Mode", "POWER (" + SHOOTER_POWER + ")");
+        telemetry.addData("Info", "Y=AprilTag Align | Share=Toggle Alliawwwwww`1`1WSEDRSWXX4R3E3Wnce");
     }
 
     @Override
@@ -330,10 +298,10 @@ public class A5 extends OpMode {
         if (gamepad1.circle && !lastCircle) {
             isShooterOn = !isShooterOn;
             if (isShooterOn) {
-                // Set velocity instead of raw power
-                shooterMotor.setVelocity(SHOOTER_VELOCITY_TPS);
+                // Set power instead of velocity
+                shooterMotor.setPower(SHOOTER_POWER);
             } else {
-                shooterMotor.setVelocity(0);
+                shooterMotor.setPower(0);
             }
         }
         lastCircle = gamepad1.circle;
@@ -372,29 +340,19 @@ public class A5 extends OpMode {
         revolver.update();
 
         // =========================================================================
-        // SOFTWARE PID CONTROL FOR INDEXER (bypasses RevolverSubsystem)
+        // TELEMETRY - General Monitoring
         // =========================================================================
-        updateIndexerPID();
-
-        // =========================================================================
-        // TELEMETRY - Enhanced for Velocity + PIDF Monitoring
-        // =========================================================================
-        telemetry.addData("Mode", "A5 - Velocity + PIDF");
+        telemetry.addData("Mode", "A5 - Power Control + Subsystem PID");
         telemetry.addData("Camera Mode", AprilTagNavigator.CAMERA_UPSIDE_DOWN ? "UPSIDE DOWN" : "NORMAL");
         telemetry.addData("Alliance", isRedAlliance ? "RED (Tag 24)" : "BLUE (Tag 20)");
         telemetry.addData("Auto Align", isAutoAligning ? "ACTIVE (Y held)" : "OFF");
         telemetry.addLine();
 
-        // Shooter status with velocity info
-        double currentShooterVelocity = shooterMotor.getVelocity();
+        // Shooter status with power info
+        double currentShooterVelocity = shooterMotor.getVelocity(); // Still read for debug
         telemetry.addData("Shooter", isShooterOn ? "ON" : "OFF");
-        telemetry.addData("  Target Vel", String.format("%.0f tps", (double) SHOOTER_VELOCITY_TPS));
-        telemetry.addData("  Actual Vel", String.format("%.0f tps", (double) currentShooterVelocity));
-
-        double errorPct = (isShooterOn && SHOOTER_VELOCITY_TPS > 0)
-                ? ((SHOOTER_VELOCITY_TPS - currentShooterVelocity) / SHOOTER_VELOCITY_TPS * 100.0)
-                : 0.0;
-        telemetry.addData("  Error", String.format("%.1f%%", errorPct));
+        telemetry.addData("  Target Power", "%.2f", SHOOTER_POWER);
+        telemetry.addData("  Actual Vel", "%.0f tps (Debug)", currentShooterVelocity);
 
         // Indexer status with position info
         telemetry.addLine();
@@ -415,7 +373,7 @@ public class A5 extends OpMode {
         if (tagNavigator != null) {
             tagNavigator.stop();
         }
-        shooterMotor.setVelocity(0);
+        shooterMotor.setPower(0);
     }
 
     /**
@@ -442,54 +400,5 @@ public class A5 extends OpMode {
         rightFront.setPower(rightFrontPower);
         leftBack.setPower(leftBackPower);
         rightBack.setPower(rightBackPower);
-    }
-
-    /**
-     * Software PID controller for indexer position
-     * Called every loop() to maintain position
-     */
-    private void updateIndexerPID() {
-        // Get current time for delta calculation
-        long currentTime = System.currentTimeMillis();
-        if (lastPIDUpdateTime == 0) {
-            lastPIDUpdateTime = currentTime;
-            return;
-        }
-        double dt = (currentTime - lastPIDUpdateTime) / 1000.0; // seconds
-        lastPIDUpdateTime = currentTime;
-
-        // Sync target from RevolverSubsystem using public getter
-        indexerTargetPosition = (int) revolver.getIndexerTargetPos();
-
-        // Calculate error
-        int currentPos = indexerMotor.getCurrentPosition();
-        double error = indexerTargetPosition - currentPos;
-
-        // PID calculations
-        indexerIntegral += error * dt;
-        // Anti-windup: clamp integral
-        indexerIntegral = Math.max(-1000, Math.min(1000, indexerIntegral));
-
-        double derivative = (error - indexerLastError) / dt;
-        indexerLastError = error;
-
-        // Calculate power output
-        double power = (INDEXER_P * error / 1000.0) +
-                (INDEXER_I * indexerIntegral / 1000.0) +
-                (INDEXER_D * derivative / 1000.0);
-
-        // Clamp power to [-1, 1]
-        power = Math.max(-1.0, Math.min(1.0, power));
-
-        // Apply power to motor
-        indexerMotor.setPower(power);
-    }
-
-    /**
-     * Set new indexer target position for software PID
-     */
-    private void setIndexerTarget(int targetTicks) {
-        indexerTargetPosition = targetTicks;
-        indexerIntegral = 0; // Reset integral on new target
     }
 }

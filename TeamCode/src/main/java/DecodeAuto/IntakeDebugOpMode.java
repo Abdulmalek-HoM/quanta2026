@@ -2,6 +2,7 @@ package DecodeAuto;
 
 import com.acmerobotics.dashboard.config.Config;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 import org.firstinspires.ftc.teamcode.subsystems.RevolverSubsystem;
@@ -24,6 +25,7 @@ import org.firstinspires.ftc.teamcode.subsystems.RevolverSubsystem;
  * TELEMETRY shows all sensor data for debugging.
  */
 @Config
+@Disabled
 @Autonomous(name = "Intake Debug (AUTO)", group = "Debug")
 public class IntakeDebugOpMode extends LinearOpMode {
 

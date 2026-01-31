@@ -8,6 +8,7 @@ import com.acmerobotics.roadrunner.PoseVelocity2d;
 import com.acmerobotics.roadrunner.Vector2d;
 import com.acmerobotics.roadrunner.ftc.Actions;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
@@ -36,6 +37,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
  * - Indexer settle: 0.5 second
  */
 @Config
+@Disabled
 @Autonomous(name = "Decode Shooting Auto RED v4.0", group = "DecodeAuto")
 public class DecodeShootingAutoRed extends LinearOpMode {
 

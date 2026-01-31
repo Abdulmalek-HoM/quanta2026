@@ -21,13 +21,14 @@ public class AprilTagNavigator {
     private int lastDetectedTagId = -1;
 
     // Drive constants (Adjustable)
+    // Drive constants (Adjustable)
     final double DESIRED_DISTANCE = 13.0;
     final double SPEED_GAIN = 0.2;
-    final double STRAFE_GAIN = 0.15;
-    final double TURN_GAIN = 0.1;
-    final double MAX_AUTO_SPEED = 0.8;
-    final double MAX_AUTO_STRAFE = 0.8;
-    final double MAX_AUTO_TURN = 0.3;
+    final double STRAFE_GAIN = 0.1;
+    final double TURN_GAIN = 0.01;
+    final double MAX_AUTO_SPEED = 0.5;
+    final double MAX_AUTO_STRAFE = 0.5;
+    final double MAX_AUTO_TURN = 0.05;
 
     // Camera Orientation (Set to true if camera is mounted upside down)
     public static boolean CAMERA_UPSIDE_DOWN = true;
