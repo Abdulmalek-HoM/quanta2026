@@ -24,11 +24,11 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
  * Based on DecodeShootingAuto v4.0, this version adds smart indexing
  * to reorder balls during travel based on the detected AprilTag pattern:
  * 
- * Tag 21 (GPP): Green first → Spin 2 slots when green detected
+ * Tag 21 (GPP): Green first  → Spin 2 slots when green detected
  * Tag 22 (PGP): Green second → Spin 1 slot when green detected
- * Tag 23 (PPG): Green last → Do nothing (green stays last)
+ * Tag 23 (PPG): Green last   → Do nothing (green stays last)
  * 
- * The SmartIndexAction runs as a parallel action while moving to
+ * The SmartIndexAction runs as a parallel action while moving to 
  * the shooting position, ensuring no time is lost.
  */
 @Config
@@ -36,7 +36,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 public class SmartIndexingDecodeShootingAuto extends LinearOpMode {
 
     // === CONFIGURABLE POSITION ===
-    public static double START_X = -56; // -56, -47
+    public static double START_X = -56;  //-56, -47
     public static double START_Y = -47;
     public static double START_HEADING_DEG = 55;
 
@@ -91,11 +91,10 @@ public class SmartIndexingDecodeShootingAuto extends LinearOpMode {
 
         // Move to intake starting position
         Action moveToIntakeStart = drive.actionBuilder(new Pose2d(-41, -33, Math.toRadians(240)))
-                // .strafeToLinearHeading(new Vector2d(-7, -5), Math.toRadians(285))
-                // .splineTo(new Vector2d(-20, -12), Math.toRadians(282)) //this one is good
-                // .splineToConstantHeading(new Vector2d(-16, -12), Math.toRadians(280)) ///
-                // hits the balls
-                // .strafeToSplineHeading(new Vector2d(-16, -12), Math.toRadians(285))
+//                .strafeToLinearHeading(new Vector2d(-7, -5), Math.toRadians(285))
+//                .splineTo(new Vector2d(-20, -12), Math.toRadians(282)) //this one is good
+//                .splineToConstantHeading(new Vector2d(-16, -12), Math.toRadians(280)) /// hits the balls
+//                .strafeToSplineHeading(new Vector2d(-16, -12), Math.toRadians(285))
                 .strafeTo(new Vector2d(-13, -5))
                 .turnTo(Math.toRadians(280))
                 .build();
@@ -308,156 +307,174 @@ public class SmartIndexingDecodeShootingAuto extends LinearOpMode {
     }
 
     /**
-     * SMART INDEXING ACTION - Reorders balls based on detected AprilTag pattern.
+     * SMART INDEXING ACTION v2.0 - Reorders balls based on detected AprilTag pattern.
      * 
-     * Runs as a parallel action while moving to shooting position.
-     * Uses color sensor to detect GREEN ball and spins indexer accordingly:
+     * FIXES in v2.0:
+     * - Added STARTUP_DELAY_MS: Wait for balls to settle before scanning
+     * - Added DEBOUNCE: Require 3 consecutive green readings to confirm
+     * - Added better telemetry for debugging
      * 
-     * Tag 21 (GPP): Green first → Spin 2 slots
+     * Tag 21 (GPP): Green first  → Spin 2 slots
      * Tag 22 (PGP): Green second → Spin 1 slot
-     * Tag 23 (PPG): Green last → Do nothing
+     * Tag 23 (PPG): Green last   → Do nothing
      */
     private class SmartIndexAction implements Action {
-        private boolean greenFound = false;
+        // State tracking
+        private boolean greenConfirmed = false;
         private boolean indexingStarted = false;
         private boolean indexingComplete = false;
         private long indexStartTime = 0;
         private long actionStartTime = 0;
-        private static final long MAX_SCAN_TIME_MS = 5000; // Max time to look for green
-        private static final long INDEX_TIMEOUT_MS = 2000; // Max time to wait for indexer
+        
+        // DEBOUNCE: Count consecutive green readings
+        private int greenConsecutiveCount = 0;
+        private static final int GREEN_CONFIRM_THRESHOLD = 3; // Need 3 consecutive greens
+        
+        // Timing constants
+        private static final long STARTUP_DELAY_MS = 500;   // Wait for balls to settle
+        private static final long MAX_SCAN_TIME_MS = 5000;  // Max time to look for green
+        private static final long INDEX_TIMEOUT_MS = 2000;  // Max time to wait for indexer
+        
+        // Debug tracking
+        private int totalReadings = 0;
+        private int greenReadings = 0;
 
         @Override
         public boolean run(@NonNull TelemetryPacket packet) {
             if (actionStartTime == 0) {
                 actionStartTime = System.currentTimeMillis();
-                telemetry.clearAll();
-                telemetry.addLine("=== SMART INDEX STARTED ===");
-                telemetry.addData("Pattern", detectedPattern.toString());
-                telemetry.addData("Expected Spin", getSlotsForPattern() + " slots");
+                telemetry.addData("SMART INDEX", "Starting - Pattern: %s", detectedPattern.toString());
                 telemetry.update();
             }
-
+            
             long elapsed = System.currentTimeMillis() - actionStartTime;
-
-            // Dashboard telemetry
+            
             packet.put("SmartIndex State", getStateString());
             packet.put("Pattern", detectedPattern.toString());
             packet.put("Elapsed", elapsed + "ms");
-
-            // Driver Station telemetry header
-            telemetry.addLine("=== SMART INDEX ===");
-            telemetry.addData("State", getStateString());
-            telemetry.addData("Pattern", detectedPattern.toString());
-            telemetry.addData("Time", elapsed / 1000.0 + "s");
-
+            
             // If pattern is PPG (23), green should be last - do nothing
             if (detectedPattern == TagConfiguration.RandomizationPattern.PURPLE_PURPLE_GREEN) {
                 packet.put("SmartIndex", "PPG - No reorder needed");
-                telemetry.addLine(">> PPG Pattern: Green already LAST");
-                telemetry.addLine(">> NO SPIN REQUIRED");
+                telemetry.addData("SMART INDEX", "PPG pattern - skipping (green already last)");
                 telemetry.update();
                 indexingComplete = true;
                 return false;
             }
-
+            
             // If pattern is unknown, skip smart indexing
             if (detectedPattern == TagConfiguration.RandomizationPattern.UNKNOWN) {
                 packet.put("SmartIndex", "Unknown pattern - skipping");
-                telemetry.addLine(">> UNKNOWN Pattern");
-                telemetry.addLine(">> Skipping smart index");
+                telemetry.addData("SMART INDEX", "UNKNOWN pattern - skipping");
                 telemetry.update();
                 indexingComplete = true;
                 return false;
             }
-
+            
             // Already done
             if (indexingComplete) {
                 return false;
             }
-
-            // Phase 1: Scan for green ball
-            if (!greenFound) {
-                // Timeout check
-                if (elapsed > MAX_SCAN_TIME_MS) {
-                    packet.put("SmartIndex", "TIMEOUT - Green not found");
-                    telemetry.addLine(">> TIMEOUT: Green not found!");
-                    telemetry.update();
-                    indexingComplete = true;
-                    return false;
-                }
-
-                RevolverSubsystem.SlotColor color = revolver.readColorNow();
-                packet.put("Detected Color", color.toString());
-
-                // Visual indicator
-                telemetry.addLine(">>> SCANNING FOR GREEN <<<");
-                telemetry.addData("Current Color", color.toString());
-                telemetry.addData("Scan Time", (MAX_SCAN_TIME_MS - elapsed) / 1000 + "s left");
-
-                if (color == RevolverSubsystem.SlotColor.GREEN) {
-                    greenFound = true;
-                    int slotsToSpin = getSlotsForPattern();
-
-                    packet.put("SmartIndex", "GREEN FOUND! Spinning " + slotsToSpin + " slots");
-
-                    telemetry.clearAll();
-                    telemetry.addLine("!!! GREEN DETECTED !!!");
-                    telemetry.addData("Pattern", detectedPattern.toString());
-                    telemetry.addData("Action", "Spinning " + slotsToSpin + " slots");
-                    telemetry.update();
-
-                    if (slotsToSpin > 0) {
-                        revolver.moveIndexerSlots(slotsToSpin);
-                        indexingStarted = true;
-                        indexStartTime = System.currentTimeMillis();
-                    } else {
-                        // No spinning needed
-                        telemetry.addLine(">> No spin needed");
-                        telemetry.update();
-                        indexingComplete = true;
-                        return false;
-                    }
-                }
-                telemetry.update();
-                return true; // Keep scanning
-            }
-
-            // Phase 2: Wait for indexer to complete
-            if (indexingStarted && !indexingComplete) {
-                long indexElapsed = System.currentTimeMillis() - indexStartTime;
-
-                telemetry.addLine(">>> INDEXER MOVING <<<");
-                telemetry.addData("Time", indexElapsed + "ms");
-                telemetry.addData("At Target", revolver.isIndexerAtTarget() ? "YES" : "no");
-                telemetry.addData("Position", revolver.getIndexerPosition());
-
-                if (revolver.isIndexerAtTarget() || indexElapsed > INDEX_TIMEOUT_MS) {
-                    indexingComplete = true;
-                    packet.put("SmartIndex", "COMPLETE - Balls reordered");
-
-                    telemetry.clearAll();
-                    telemetry.addLine("=== SMART INDEX COMPLETE ===");
-                    telemetry.addData("Pattern", detectedPattern.toString());
-                    telemetry.addData("Slots Spun", getSlotsForPattern());
-                    telemetry.addLine(">> Green ball repositioned!");
-                    telemetry.update();
-                    return false;
-                }
-
-                packet.put("SmartIndex", "Indexing... " + indexElapsed + "ms");
+            
+            // === STARTUP DELAY: Wait for balls to settle ===
+            if (elapsed < STARTUP_DELAY_MS) {
+                packet.put("SmartIndex", "Waiting for settle... " + elapsed + "/" + STARTUP_DELAY_MS + "ms");
+                telemetry.addData("SMART INDEX", "Settling... %d/%dms", elapsed, STARTUP_DELAY_MS);
                 telemetry.update();
                 return true; // Keep waiting
             }
-
+            
+            // === PHASE 1: Scan for green ball with DEBOUNCE ===
+            if (!greenConfirmed) {
+                // Timeout check (excluding startup delay)
+                long scanTime = elapsed - STARTUP_DELAY_MS;
+                if (scanTime > MAX_SCAN_TIME_MS) {
+                    packet.put("SmartIndex", "TIMEOUT - Green not confirmed");
+                    telemetry.addData("SMART INDEX", "TIMEOUT after %d readings (%d green)", totalReadings, greenReadings);
+                    telemetry.update();
+                    indexingComplete = true;
+                    return false;
+                }
+                
+                // Read color sensor
+                RevolverSubsystem.SlotColor color = revolver.readColorNow();
+                totalReadings++;
+                
+                packet.put("Detected Color", color.toString());
+                packet.put("Green Count", greenConsecutiveCount + "/" + GREEN_CONFIRM_THRESHOLD);
+                
+                // DEBOUNCE: Count consecutive green readings
+                if (color == RevolverSubsystem.SlotColor.GREEN) {
+                    greenConsecutiveCount++;
+                    greenReadings++;
+                    
+                    telemetry.addData("SMART INDEX", "Green detected! Count: %d/%d", 
+                            greenConsecutiveCount, GREEN_CONFIRM_THRESHOLD);
+                    telemetry.update();
+                    
+                    // CONFIRMED: Got enough consecutive greens
+                    if (greenConsecutiveCount >= GREEN_CONFIRM_THRESHOLD) {
+                        greenConfirmed = true;
+                        int slotsToSpin = getSlotsForPattern();
+                        
+                        packet.put("SmartIndex", "GREEN CONFIRMED! Spinning " + slotsToSpin + " slots");
+                        telemetry.addData("SMART INDEX", "GREEN CONFIRMED! Spinning %d slots for %s", 
+                                slotsToSpin, detectedPattern.toString());
+                        telemetry.update();
+                        
+                        if (slotsToSpin > 0) {
+                            revolver.moveIndexerSlots(slotsToSpin);
+                            indexingStarted = true;
+                            indexStartTime = System.currentTimeMillis();
+                        } else {
+                            // No spinning needed (shouldn't happen for GPP/PGP)
+                            indexingComplete = true;
+                            return false;
+                        }
+                    }
+                } else {
+                    // Not green - reset consecutive counter
+                    if (greenConsecutiveCount > 0) {
+                        telemetry.addData("SMART INDEX", "Green lost, resetting count (was %d)", greenConsecutiveCount);
+                        telemetry.update();
+                    }
+                    greenConsecutiveCount = 0;
+                }
+                
+                return true; // Keep scanning
+            }
+            
+            // === PHASE 2: Wait for indexer to complete ===
+            if (indexingStarted && !indexingComplete) {
+                long indexElapsed = System.currentTimeMillis() - indexStartTime;
+                
+                boolean atTarget = revolver.isIndexerAtTarget();
+                packet.put("Indexer At Target", atTarget);
+                packet.put("Index Time", indexElapsed + "ms");
+                
+                if (atTarget || indexElapsed > INDEX_TIMEOUT_MS) {
+                    indexingComplete = true;
+                    packet.put("SmartIndex", "COMPLETE - Balls reordered");
+                    telemetry.addData("SMART INDEX", "COMPLETE! Indexer settled after %dms", indexElapsed);
+                    telemetry.update();
+                    return false;
+                }
+                
+                packet.put("SmartIndex", "Indexing... " + indexElapsed + "ms");
+                telemetry.addData("SMART INDEX", "Indexing... %dms", indexElapsed);
+                telemetry.update();
+                return true; // Keep waiting
+            }
+            
             return !indexingComplete;
         }
-
+        
         /**
          * Get the number of slots to spin based on detected pattern.
          * 
-         * GPP (21): Green first → Spin 2 slots to move green to shooting position
+         * GPP (21): Green first  → Spin 2 slots to move green to shooting position
          * PGP (22): Green second → Spin 1 slot to move green to second position
-         * PPG (23): Green last → No spin needed (handled above)
+         * PPG (23): Green last   → No spin needed (handled above)
          */
         private int getSlotsForPattern() {
             switch (detectedPattern) {
@@ -471,14 +488,12 @@ public class SmartIndexingDecodeShootingAuto extends LinearOpMode {
                     return 0;
             }
         }
-
+        
         private String getStateString() {
-            if (indexingComplete)
-                return "COMPLETE";
-            if (indexingStarted)
-                return "INDEXING";
-            if (greenFound)
-                return "GREEN_FOUND";
+            if (indexingComplete) return "COMPLETE";
+            if (indexingStarted) return "INDEXING";
+            if (greenConfirmed) return "GREEN_CONFIRMED";
+            if (greenConsecutiveCount > 0) return "DETECTING(" + greenConsecutiveCount + ")";
             return "SCANNING";
         }
     }
